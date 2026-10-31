@@ -51,11 +51,17 @@ func Extract(p model.Post, source model.Source, now time.Time) model.Opportunity
 		SourceID: source.ID, SourceName: source.Name, SourceKind: source.Kind, SourceURL: source.URL,
 		CaptureMethod: p.CaptureMethod, ExtractionVersion: "rules-1", PublishedAt: p.PublishedAt,
 		FirstSeenAt: now.UTC(), UpdatedAt: now.UTC(), LastFetchedAt: now.UTC(), Reactions: p.Reactions, Comments: p.Comments,
+		Reposts: p.Reposts, Quotes: p.Quotes,
 	}
 	if IsLinkedInHost(p.URL) {
 		if id := LinkedInIdentity(p.URL); id != "" {
 			o.ID = id
 		}
+	}
+	if id := XPostID(p.URL); id != "" {
+		o.ID = "x-" + id
+		o.URL = "https://x.com/i/status/" + id
+		o.PostAuthor, o.Organizer = p.Author, ""
 	}
 	o.Deadline, o.DeadlineState, o.DeadlineText = extractDeadline(body)
 	if o.DeadlineText != "" {
@@ -117,6 +123,9 @@ func classify(text string) string {
 	patterns := []struct{ kind, pattern string }{
 		{"scholarship", `\b(?:scholarships?|bursar(?:y|ies)|scholars program(?:me)?)\b`},
 		{"fellowship", `\b(?:fellowships?|fellows program(?:me)?|post[ -]?doctoral)\b`},
+		{"bounty", `\b(?:bug bount(?:y|ies)|bount(?:y|ies)|paid contributions?)\b`},
+		{"freelance", `\b(?:freelanc(?:e|er|ers|ing)|contract (?:work|role|position)|consulting opportunity)\b`},
+		{"research", `\b(?:research (?:position|opportunity|assistant|role)|lab opening|academic position)\b`},
 		{"program", `\b(?:incubat(?:ion|or)|accelerators?|accelerator program(?:me)?)\b`},
 		{"grant", `\b(?:grants?|funding call|call for proposals)\b`},
 		{"internship", `\b(?:internships?|graduate (?:development|trainee)|trainee (?:program(?:me)?|associate))\b`},

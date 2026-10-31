@@ -6,6 +6,7 @@ package bootstrap
 import (
 	"context"
 	"errors"
+	"net/url"
 	"time"
 
 	"github.com/YeandAmen/radwave/internal/ingest"
@@ -15,6 +16,12 @@ import (
 
 const ExampleURL = "https://www.linkedin.com/posts/uesdnkabom_nkabomcollaborative-businessincubation-activity-7520960460347768832-FWkQ"
 const ExampleShareURL = "https://www.linkedin.com/posts/uesdnkabom_nkabomcollaborative-businessincubation-youthentrepreneurship-share-7520960459173359618-P2jG"
+
+func SeedX(ctx context.Context, s *store.Store) error {
+	query := ingest.XWatchlists["funding"]
+	_, _, err := s.AddSource(ctx, model.Source{Name: "X · Funding & fellowships", URL: "https://x.com/search?q=" + url.QueryEscape(query), Kind: "x_search", Enabled: false, Status: "idle", LastError: "X discovery is prepared. Enable this source after X API access or credits are available."})
+	return err
+}
 
 const ExampleBody = `CALL FOR APPLICATIONS: Business Incubation Programme for Young Entrepreneurs
 Are you a young entrepreneur ready to grow your business?

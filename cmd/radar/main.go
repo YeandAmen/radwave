@@ -19,6 +19,7 @@ import (
 	"github.com/YeandAmen/radwave/internal/bootstrap"
 	"github.com/YeandAmen/radwave/internal/crawler"
 	"github.com/YeandAmen/radwave/internal/ingest"
+	"github.com/YeandAmen/radwave/internal/legacy"
 	"github.com/YeandAmen/radwave/internal/model"
 	"github.com/YeandAmen/radwave/internal/store"
 	"github.com/YeandAmen/radwave/internal/web"
@@ -40,8 +41,8 @@ func run(args []string) error {
 		fmt.Println("Radwave v0.2.0")
 		return nil
 	}
-	if !model.Contains([]string{"serve", "crawl", "import", "export", "migrate"}, command) {
-		return fmt.Errorf("unknown command %q; use serve, crawl, import, export, migrate, or version", command)
+	if !model.Contains([]string{"serve", "crawl", "import", "export", "migrate", "import-twitter"}, command) {
+		return fmt.Errorf("unknown command %q; use serve, crawl, import, export, migrate, import-twitter, or version", command)
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	dbPath := flags.String("db", env("RADAR_DB", "data/radar.db"), "SQLite database path")
@@ -69,6 +70,9 @@ func run(args []string) error {
 	case "migrate":
 		migrateFrom = flags.String("from", "data/radar.db", "source SQLite database to copy into an empty destination")
 		envFile = flags.String("env-file", "", "private environment file containing the hosted DATABASE_URL")
+	case "import-twitter":
+		migrateFrom = flags.String("from", "", "original Twitter scraper SQLite database")
+		envFile = flags.String("env-file", "", "private environment file containing the hosted DATABASE_URL")
 	}
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -79,7 +83,7 @@ func run(args []string) error {
 	if flags.NArg() > 0 {
 		return errors.New("unexpected positional arguments")
 	}
-	if command == "migrate" {
+	if command == "migrate" || command == "import-twitter" {
 		if *envFile != "" {
 			if err := loadEnvironment(*envFile); err != nil {
 				return err
@@ -120,6 +124,16 @@ func run(args []string) error {
 		return err
 	}
 	defer s.Close()
+	if command == "import-twitter" {
+		if *migrateFrom == "" {
+			return errors.New("provide the legacy database with -from")
+		}
+		result, err := legacy.ImportTwitter(ctx, *migrateFrom, s)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(result)
+	}
 	if command == "migrate" {
 		source, err := store.Open(*migrateFrom)
 		if err != nil {
@@ -138,6 +152,12 @@ func run(args []string) error {
 		}
 	}
 	engine := crawler.New(s, ingest.NewHTTPFetcher(timeout, delay), interval)
+	engine.X = ingest.NewXClient(env("X_BEARER_TOKEN", os.Getenv("TWITTER_BEARER_TOKEN")))
+	if *seed && engine.X.Configured() {
+		if err := bootstrap.SeedX(ctx, s); err != nil {
+			return err
+		}
+	}
 	engine.MaxItems = *maxItems
 	switch command {
 	case "serve":

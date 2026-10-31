@@ -21,10 +21,11 @@ The globe uses self-hosted MapLibre GL JS and public-domain Natural Earth countr
 ## What it does
 
 - **Discover and refresh:** public LinkedIn posts, exposed post links on public LinkedIn pages, RSS/Atom feeds, and individual opportunity articles.
+- **Merge X / Twitter signals:** API search watchlists, profile timelines, individual posts, and imports from the original Twitter scraper feed the same Radwave database, extraction, histories, and interface.
 - **Make announcements actionable:** type, deadline, eligibility, benefits, application link, location when stated, discovery region, and topic tags.
 - **Keep the evidence:** original announcement, source URL, capture time, extraction evidence, and a clear indication of missing details.
-- **Track updates and engagement:** content/deadline changes, reaction/comment counts when exposed, and observation histories with count deltas.
-- **Help people shortlist:** search, type/region/status filters, deadline-first and popularity sorting, grid/list layouts, saved opportunities, and shareable detail links.
+- **Track updates and engagement:** content/deadline changes, reaction/comment counts when exposed, X likes/replies/reposts/quotes, and observation histories with count deltas.
+- **Help people shortlist:** search, channel/type/region/status filters, deadline-first and popularity sorting, grid/list layouts, saved opportunities, and shareable detail links.
 - **Make the feed useful elsewhere:** filtered CSV/JSON exports and an RSS digest.
 - **Run simply:** one binary, embedded assets, pure-Go SQLite, built-in scheduling, and a non-root Docker image.
 
@@ -65,7 +66,7 @@ No Node.js installation, database server, LLM key, or LinkedIn login is needed t
 
 ### Add an opportunity
 
-Click **Add a link** and enter an individual LinkedIn post or opportunity-article URL. Radwave fetches the readable public announcement and extracts its fields.
+Click **Add a link** and enter an individual LinkedIn post, X / Twitter post, or opportunity-article URL. Radwave fetches the readable announcement and extracts its fields; fetching X posts requires configured API access.
 
 If the page is unavailable, expand **Have the post text?** and paste the announcement. The result is marked **Text import**. Include the eligibility, application link, and complete deadline in the pasted text for the clearest result.
 
@@ -79,8 +80,30 @@ Open **Sources → Add source**. Give it a name and a URL, and choose or automat
 | Public LinkedIn company/profile page | Discover the individual post links visible on the returned public page. |
 | Individual LinkedIn post             | Refresh the announcement and publicly exposed engagement counts.        |
 | Opportunity article                  | Refresh one publisher announcement.                                     |
+| X / Twitter search watchlist         | Discover recent matching posts through the X API.                       |
+| X / Twitter profile timeline         | Discover posts from one account through the X API.                      |
+| Individual X / Twitter post          | Refresh its announcement and available engagement counts.               |
 
 Sources can be paused. Pausing preserves existing opportunities and their histories.
+
+### Twitter scraper, now inside Radwave
+
+[The original Twitter scraper](https://github.com/YeandAmen/twitter-scrapper) is integrated as an ingestion adapter. Radwave is the main app: one hosted database, one source manager, one refresh workflow, and one opportunity workspace for LinkedIn, X, feeds, and publisher articles.
+
+Open **Sources → Add an X watchlist** to use presets for funding/fellowships, programs/hackathons, careers/research, or bounties. Profiles and individual posts can be added using ordinary `x.com` or `twitter.com` URLs. The **All signals / LinkedIn / X / Feeds / Articles** tabs filter the combined feed.
+
+Set `X_BEARER_TOKEN` in the server environment for API discovery. The credential must have access to the selected X endpoints and any required API credits. HTTP 401, 402, 403, and 429 responses appear in source status and use backoff. Prepared watchlists start paused. Pasted X announcement text can be imported without API discovery; newly created sources for pasted X posts also start paused.
+
+The adapter expands short application URLs, uses long-post text when available, maps likes/replies/reposts/quotes into capture histories, and preserves unknown metrics as `null`. Tweet identities deduplicate across `x.com` and `twitter.com` aliases. Search/profile checkpoints advance only after returned posts have been processed; captured posts can be refreshed for engagement changes.
+
+To import an existing scraper database into Radwave:
+
+```sh
+go run ./cmd/radar import-twitter -from /path/to/twitter-scrapper/data/opportunities.db \
+  -env-file /private/path/production.env
+```
+
+This imports public opportunity records as a labeled X archive, preserving recorded capture times without treating them as publication dates. Older archive captures cannot replace newer live records. Legacy account/API-key and email-delivery tables are excluded from this import.
 
 The default schedule is every **30 minutes**, with **20 feed entries/page links per source**, **two concurrent sources**, and at least **two seconds between requests to the same host**. Failed access uses backoff; the source panel shows the next check time. **Refresh sources** explicitly retries enabled sources.
 
@@ -121,15 +144,16 @@ go run ./cmd/radar serve -seed=false -auto-crawl=false
 
 ## Configuration
 
-| Environment variable  | Default          | Purpose                                                |
-| --------------------- | ---------------- | ------------------------------------------------------ |
-| `RADAR_ADDR`          | `127.0.0.1:8080` | Listening address.                                     |
-| `RADAR_DB`            | `data/radar.db`  | SQLite database file.                                  |
-| `RADAR_INTERVAL`      | `30m`            | Scheduled refresh interval; `0` disables the timer.    |
-| `RADAR_AUTO_CRAWL`    | `true`           | Startup and scheduled crawling.                        |
-| `RADAR_REQUEST_DELAY` | `2s`             | Minimum same-host request spacing.                     |
-| `RADAR_HTTP_TIMEOUT`  | `25s`            | Timeout for each source request.                       |
-| `RADAR_ADMIN_TOKEN`   | Empty            | Bearer token for management endpoints when configured. |
+| Environment variable  | Default          | Purpose                                                       |
+| --------------------- | ---------------- | ------------------------------------------------------------- |
+| `RADAR_ADDR`          | `127.0.0.1:8080` | Listening address.                                            |
+| `RADAR_DB`            | `data/radar.db`  | SQLite database file.                                         |
+| `RADAR_INTERVAL`      | `30m`            | Scheduled refresh interval; `0` disables the timer.           |
+| `RADAR_AUTO_CRAWL`    | `true`           | Startup and scheduled crawling.                               |
+| `RADAR_REQUEST_DELAY` | `2s`             | Minimum same-host request spacing.                            |
+| `RADAR_HTTP_TIMEOUT`  | `25s`            | Timeout for each source request.                              |
+| `RADAR_ADMIN_TOKEN`   | Empty            | Bearer token for management endpoints when configured.        |
+| `X_BEARER_TOKEN`      | Empty            | Server-side X API credential for search, profiles, and posts. |
 
 The corresponding flags are `-addr`, `-db`, `-interval`, `-auto-crawl`, `-request-delay`, and `-http-timeout`. `-max-items` sets the per-source entry/link limit from 1 to 50. Use `go run ./cmd/radar serve -h` for command help.
 
@@ -139,7 +163,7 @@ Environment values are read from the process environment. `.env.example` documen
 
 The live deployment runs the Go HTTP server on Vercel with a dedicated Neon PostgreSQL database. Its data, source state, and observation histories persist across function instances and redeployments.
 
-`cmd/server/main.go` is the Vercel entrypoint. It uses `PORT`, `DATABASE_URL`, `RADAR_ADMIN_TOKEN`, and `CRON_SECRET`. Hosted refreshes complete inside the request, and a shared database lease prevents overlapping crawls across instances. Neon connections use its secure WebSocket PostgreSQL transport.
+`cmd/server/main.go` is the Vercel entrypoint. It uses `PORT`, `DATABASE_URL`, `RADAR_ADMIN_TOKEN`, `CRON_SECRET`, and optional `X_BEARER_TOKEN`. Hosted refreshes complete inside the request, and a shared database lease prevents overlapping crawls across instances. Neon connections use its secure WebSocket PostgreSQL transport.
 
 The **Refresh hosted opportunities** GitHub workflow invokes the protected `/api/cron` endpoint every 30 minutes. This provides regular updates on Vercel Hobby without depending on a process-local timer. Configure the repository variable `RADAR_PRODUCTION_URL` and secret `RADAR_CRON_SECRET`; the latter must match Vercel's `CRON_SECRET`.
 
@@ -181,7 +205,7 @@ Compose binds the host port to localhost and persists SQLite in the `radar-data`
 | POST   | `/api/sources`            | Add a tracked source.                                    |
 | PATCH  | `/api/sources/{id}`       | Pause/resume or rename a source.                         |
 | POST   | `/api/import`             | Import a URL or supplied announcement text.              |
-| POST   | `/api/crawl`              | Start a background refresh, optionally by `source_id`.   |
+| POST   | `/api/crawl`              | Refresh sources, optionally by `source_id`.              |
 | POST   | `/api/unlock`             | Validate the configured management token.                |
 | GET    | `/api/runs`               | Recent crawl reports.                                    |
 | GET    | `/api/cron`               | Authenticated hosted refresh of sources that are due.    |
@@ -189,7 +213,9 @@ Compose binds the host port to localhost and persists SQLite in the `radar-data`
 | GET    | `/feed.xml`               | Recent non-closed opportunities as RSS.                  |
 | GET    | `/healthz`                | Database-backed health response.                         |
 
-Opportunity queries accept `q`, `kind` (comma-separated types), `region`, `status`, `source`, `sort`, `limit`, `offset`, and `ids` (up to 200 shortlist IDs). The list limit is at most 200; exports include at most 10,000 matching records and JSON reports the number exported.
+Opportunity queries accept `q`, `kind` (comma-separated types), `platform` (`linkedin`, `x`, `rss`, or `web`), `region`, `status`, `source`, `sort`, `limit`, `offset`, and `ids` (up to 200 shortlist IDs). Omit `platform` for the combined feed. The list limit is at most 200; exports include at most 10,000 matching records and JSON reports the number exported.
+
+`POST /api/crawl` runs inside the request on Vercel and starts a background refresh in standalone deployments.
 
 Status values are `active` (not closed), `closing`, `open`, `rolling`, `unknown`, `closed`, and `all`. The default `active` feed includes unconfirmed deadlines, clearly labeled **Unconfirmed**. Dates are compared against the current UTC calendar day. Sort values are `deadline`, `newest`, `popular`, and `updated`.
 

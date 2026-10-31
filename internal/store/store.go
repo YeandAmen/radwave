@@ -116,10 +116,13 @@ func (s *Store) Upsert(ctx context.Context, incoming model.Opportunity) (UpsertR
 	observation := model.Observation{
 		OpportunityID: incoming.ID, ObservedAt: incoming.LastFetchedAt, Changes: changes,
 		Reactions: incoming.Reactions, Comments: incoming.Comments, CaptureMethod: incoming.CaptureMethod,
+		Reposts: incoming.Reposts, Quotes: incoming.Quotes,
 	}
 	if !created {
 		observation.ReactionsDelta = delta(old.Reactions, incoming.Reactions)
 		observation.CommentsDelta = delta(old.Comments, incoming.Comments)
+		observation.RepostsDelta = delta(old.Reposts, incoming.Reposts)
+		observation.QuotesDelta = delta(old.Quotes, incoming.Quotes)
 	}
 	encodedObservation, err := json.Marshal(observation)
 	if err != nil {
@@ -232,6 +235,19 @@ func queryWhere(q model.Query, now time.Time) (string, []any) {
 		clauses = append(clauses, "json_extract(data,'$.source_id') = ?")
 		args = append(args, q.Source)
 	}
+	if q.Platform != "" {
+		kinds := map[string][]string{"x": {"x_search", "x_profile", "x_post", "x_archive"}, "linkedin": {"linkedin_post", "linkedin_page"}, "rss": {"rss"}, "web": {"web_page"}}[q.Platform]
+		if len(kinds) == 0 {
+			clauses = append(clauses, "1 = 0")
+		} else {
+			placeholders := []string{}
+			for _, kind := range kinds {
+				placeholders = append(placeholders, "?")
+				args = append(args, kind)
+			}
+			clauses = append(clauses, "json_extract(data,'$.source_kind') IN ("+strings.Join(placeholders, ",")+")")
+		}
+	}
 	today := now.UTC().Format("2006-01-02")
 	switch q.Status {
 	case "active":
@@ -287,12 +303,14 @@ func changedFields(a, b model.Opportunity) []string {
 	}{
 		{"Title updated", a.Title, b.Title}, {"Program details updated", a.Body, b.Body},
 		{"Organizer updated", a.Organizer, b.Organizer}, {"Opportunity type updated", a.Kind, b.Kind},
+		{"Publisher updated", a.PostAuthor, b.PostAuthor},
 		{"Discovery region updated", a.Region, b.Region}, {"Funding updated", a.Funding, b.Funding},
 		{"Topics updated", a.Tags, b.Tags},
 		{"Deadline updated", a.Deadline + a.DeadlineState, b.Deadline + b.DeadlineState},
 		{"Eligibility updated", a.Eligibility, b.Eligibility}, {"Benefits updated", a.Benefits, b.Benefits},
 		{"Application link updated", a.ApplicationURL, b.ApplicationURL}, {"Location updated", a.Location, b.Location},
 		{"Reactions updated", a.Reactions, b.Reactions}, {"Comments updated", a.Comments, b.Comments},
+		{"Reposts updated", a.Reposts, b.Reposts}, {"Quotes updated", a.Quotes, b.Quotes},
 		{"Source capture updated", a.CaptureMethod, b.CaptureMethod},
 	}
 	for _, field := range fields {

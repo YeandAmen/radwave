@@ -38,6 +38,7 @@ func serve() error {
 	app, err := deployment.New(ctx, deployment.Config{
 		DatabaseURL: url, Addr: ":" + port, AdminToken: os.Getenv("RADAR_ADMIN_TOKEN"), CronSecret: os.Getenv("CRON_SECRET"),
 		RequireSharedStorage: os.Getenv("VERCEL") != "",
+		XBearerToken:         os.Getenv("X_BEARER_TOKEN"),
 	})
 	if err != nil {
 		return err

@@ -4,14 +4,15 @@ Radwave is a Go application with an embedded HTML/CSS/JavaScript dashboard. Stan
 
 ```text
 RSS / Atom ──────┐
-LinkedIn posts ──┤
-Public pages ────┼─> HTTP fetcher ─> source parser ─> conservative extraction
-Pasted text ─────┘                                         │
-                                                          v
-                               SQLite: opportunities + source state + observations
-                                                          │
-                                                          v
-                                Go HTTP API + dashboard + CSV / JSON + RSS digest
+LinkedIn posts ──┼─> HTTP fetcher ─> source parser ─┐
+Public pages ────┘                                 │
+X search / profiles / posts ─> X API adapter ───────┼─> shared extraction
+Pasted text / legacy X archive ────────────────────┘          │
+                                                             v
+                             SQLite or PostgreSQL: opportunities + sources + observations
+                                                             │
+                                                             v
+                              Go HTTP API + dashboard + CSV / JSON + RSS digest
 ```
 
 ## Packages
@@ -19,8 +20,10 @@ Pasted text ─────┘                                         │
 - `cmd/radar`: commands, configuration, scheduling, process lifecycle.
 - `internal/model`: opportunity, source, observation, and crawl-run records.
 - `internal/ingest`: URL normalization, safe HTTP fetching, JSON-LD/HTML and RSS/Atom parsing, and evidence-backed extraction.
+- `internal/ingest/x.go`: fixed-host X API access, watchlist/profile pagination, long-post text, expanded links, and public engagement counters.
+- `internal/legacy`: imports the original Twitter scraper's opportunity records into Radwave's schema.
 - `internal/crawler`: source coordination, conditional feed requests, bounded discovery, and refresh/backoff logic.
-- `internal/store`: SQLite persistence, filtering, deduplication, and update histories.
+- `internal/store`: SQLite/PostgreSQL persistence, filtering, deduplication, and update histories.
 - `internal/bootstrap`: starter sources and the dated reference example.
 - `internal/web`: HTTP endpoints and the embedded dashboard.
 - `internal/web/assets/globe.js`: region exploration with a self-hosted MapLibre renderer and Natural Earth geometry.
@@ -29,12 +32,14 @@ Pasted text ─────┘                                         │
 
 ## Source pipeline
 
+Twitter/X is an additional adapter in this pipeline. Search watchlists and profile timelines keep pagination/high-water checkpoints in source state; individual posts and batched captured posts refresh metrics. X API rate limits and access failures produce persisted status/backoff rather than blocking sleeps. The frontend filters a single opportunity store by platform, and all sources share the same crawl lease, extraction rules, histories, and exports.
+
 1. Sources are selected from enabled records that are due for a refresh. A manual refresh can bypass the due time.
 2. Up to two sources run concurrently. Requests to the same host are separated by two seconds by default.
 3. Feed entries are discovered from RSS/Atom. Relevant entries are expanded by fetching the publisher's article. A public LinkedIn page is scanned for the individual post links it exposes.
 4. LinkedIn post JSON-LD provides post text, author, publication time, and top-level interaction counters. HTML attributes provide a fallback. Nested comment reactions and author follower counts are not used as post engagement.
 5. Extraction records type, deadline, eligibility, benefits, direct application link, topic tags, and supporting source wording. Missing details remain missing.
-6. Canonical post URLs and LinkedIn activity identities are upserted into SQLite. Known individual-post source URLs also resolve their canonical aliases for text imports.
+6. Canonical post URLs, LinkedIn activity identities, and X post identities are upserted into the shared database. Known individual-post source URLs also resolve their canonical aliases for text imports.
 7. Every successful capture gets an observation. Changed deadlines, text, links, and engagement counts get explicit change labels and numeric deltas when both counts are known.
 8. Source status and a crawl report are persisted. Failed access does not replace a previously captured opportunity. A failed article fetch can provide an explicitly labeled RSS summary for a new opportunity.
 
@@ -47,6 +52,8 @@ Date-only deadlines are compared against the current UTC calendar date. The clos
 Region labels come from publisher categories or explicit worldwide wording. They support discovery and do not substitute for country eligibility. Profile country domains and commenter statements are not used to infer eligibility or location.
 
 Extraction is deterministic and requires no LLM key. The extracted record includes the original body, capture method, observation time, and field evidence.
+
+Legacy X archives preserve `scraped_at` as the capture time, not a claimed publication date. A historical capture cannot overwrite a newer live capture. Pasted X posts create paused sources, so importing text alone does not enable API polling.
 
 ## Persistence and refreshes
 

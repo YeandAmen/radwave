@@ -10,9 +10,9 @@ import (
 	"time"
 )
 
-var Kinds = []string{"program", "scholarship", "fellowship", "grant", "internship", "competition", "job", "training", "conference", "volunteering"}
+var Kinds = []string{"program", "scholarship", "fellowship", "grant", "internship", "competition", "job", "bounty", "freelance", "research", "training", "conference", "volunteering"}
 var Regions = []string{"Worldwide", "Africa", "Americas", "Asia", "Europe", "Oceania", "Not stated"}
-var SourceKinds = []string{"linkedin_post", "linkedin_page", "rss", "web_page"}
+var SourceKinds = []string{"linkedin_post", "linkedin_page", "rss", "web_page", "x_search", "x_profile", "x_post", "x_archive"}
 
 type Opportunity struct {
 	ID                string            `json:"id"`
@@ -20,6 +20,7 @@ type Opportunity struct {
 	Title             string            `json:"title"`
 	Kind              string            `json:"kind"`
 	Organizer         string            `json:"organizer"`
+	PostAuthor        string            `json:"post_author,omitempty"`
 	Summary           string            `json:"summary"`
 	Body              string            `json:"body"`
 	ApplicationURL    string            `json:"application_url"`
@@ -46,6 +47,8 @@ type Opportunity struct {
 	LastFetchedAt     time.Time         `json:"last_fetched_at"`
 	Reactions         *int64            `json:"reactions"`
 	Comments          *int64            `json:"comments"`
+	Reposts           *int64            `json:"reposts"`
+	Quotes            *int64            `json:"quotes"`
 	Status            string            `json:"status"`
 	DaysLeft          *int              `json:"days_left"`
 }
@@ -77,20 +80,24 @@ func (o *Opportunity) Decorate(now time.Time) {
 }
 
 type Source struct {
-	ID            string     `json:"id"`
-	Name          string     `json:"name"`
-	URL           string     `json:"url"`
-	Kind          string     `json:"kind"`
-	Enabled       bool       `json:"enabled"`
-	Status        string     `json:"status"`
-	LastError     string     `json:"last_error"`
-	LastCrawledAt *time.Time `json:"last_crawled_at"`
-	NextCrawlAt   *time.Time `json:"next_crawl_at"`
-	CreatedAt     time.Time  `json:"created_at"`
-	Failures      int        `json:"failures"`
-	ItemCount     int        `json:"item_count"`
-	ETag          string     `json:"-"`
-	LastModified  string     `json:"-"`
+	ID             string     `json:"id"`
+	Name           string     `json:"name"`
+	URL            string     `json:"url"`
+	Kind           string     `json:"kind"`
+	Enabled        bool       `json:"enabled"`
+	Status         string     `json:"status"`
+	LastError      string     `json:"last_error"`
+	LastCrawledAt  *time.Time `json:"last_crawled_at"`
+	NextCrawlAt    *time.Time `json:"next_crawl_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+	Failures       int        `json:"failures"`
+	ItemCount      int        `json:"item_count"`
+	ETag           string     `json:"-"`
+	LastModified   string     `json:"-"`
+	SinceID        string     `json:"-"`
+	NextToken      string     `json:"-"`
+	PendingSinceID string     `json:"-"`
+	XUserID        string     `json:"-"`
 }
 
 type Observation struct {
@@ -102,6 +109,10 @@ type Observation struct {
 	Comments       *int64    `json:"comments"`
 	ReactionsDelta *int64    `json:"reactions_delta"`
 	CommentsDelta  *int64    `json:"comments_delta"`
+	Reposts        *int64    `json:"reposts"`
+	Quotes         *int64    `json:"quotes"`
+	RepostsDelta   *int64    `json:"reposts_delta"`
+	QuotesDelta    *int64    `json:"quotes_delta"`
 	CaptureMethod  string    `json:"capture_method"`
 }
 
@@ -125,18 +136,20 @@ type Stats struct {
 	Sources      int            `json:"sources"`
 	Kinds        map[string]int `json:"kinds"`
 	Regions      map[string]int `json:"regions"`
+	Platforms    map[string]int `json:"platforms"`
 }
 
 type Query struct {
-	IDs    []string
-	Search string
-	Kind   string
-	Region string
-	Status string
-	Source string
-	Sort   string
-	Limit  int
-	Offset int
+	IDs      []string
+	Search   string
+	Kind     string
+	Region   string
+	Status   string
+	Source   string
+	Platform string
+	Sort     string
+	Limit    int
+	Offset   int
 }
 
 type Link struct {
@@ -155,7 +168,22 @@ type Post struct {
 	PublishedAt   *time.Time
 	Reactions     *int64
 	Comments      *int64
+	Reposts       *int64
+	Quotes        *int64
 	CaptureMethod string
+}
+
+func Platform(sourceKind string) string {
+	if strings.HasPrefix(sourceKind, "x_") {
+		return "x"
+	}
+	if strings.HasPrefix(sourceKind, "linkedin_") {
+		return "linkedin"
+	}
+	if sourceKind == "rss" {
+		return "rss"
+	}
+	return "web"
 }
 
 func StableID(value string) string {

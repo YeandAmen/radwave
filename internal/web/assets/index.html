@@ -327,6 +327,11 @@
             id="category-tabs"
             aria-label="Filter opportunity types"
           ></div>
+          <div
+            class="channel-tabs"
+            id="channel-tabs"
+            aria-label="Filter by source channel"
+          ></div>
           <details class="more-types">
             <summary>
               All opportunity types
@@ -391,6 +396,18 @@
             </p>
           </div>
           <div id="source-list" class="source-list" aria-live="polite"></div>
+          <div
+            class="x-connection"
+            id="x-connection"
+            hidden
+            aria-live="polite"
+          ></div>
+          <div class="x-source-actions">
+            <span class="eyebrow">MORE SIGNALS / ONE RADWAVE</span
+            ><button class="inline-link" id="add-x-source">
+              𝕏 Add an X watchlist
+            </button>
+          </div>
           <div class="section-heading recent-heading">
             <div>
               <span class="eyebrow">THE LATEST FIELD NOTES</span>
@@ -439,8 +456,8 @@
       </div>
       <h2 id="import-title">One link.<br />A clearer opportunity.</h2>
       <p class="dialog-intro">
-        Add a public LinkedIn post or opportunity article. Bring the important
-        details into focus.
+        Add a public LinkedIn post, an X / Twitter post, or an opportunity
+        article. Bring the important details into focus.
       </p>
       <form id="import-form">
         <label class="form-label" for="import-url"
@@ -533,7 +550,37 @@
           </option>
           <option value="linkedin_post">Individual LinkedIn post</option>
           <option value="web_page">Opportunity article</option>
+          <option value="x_search">X / Twitter search watchlist</option>
+          <option value="x_profile">X / Twitter profile timeline</option>
+          <option value="x_post">Individual X / Twitter post</option>
         </select>
+        <div class="x-search-fields" id="x-search-fields" hidden>
+          <label class="form-label" for="x-search-query">X search query</label
+          ><textarea
+            class="form-input"
+            id="x-search-query"
+            maxlength="512"
+            rows="3"
+            placeholder="scholarship apply -is:retweet lang:en"
+          ></textarea>
+          <div class="x-presets" aria-label="X watchlist presets">
+            <button type="button" data-x-preset="funding">
+              Funding & fellowships</button
+            ><button type="button" data-x-preset="programs">
+              Programs & hackathons</button
+            ><button type="button" data-x-preset="careers">
+              Careers & research</button
+            ><button type="button" data-x-preset="bounties">Bounties</button>
+          </div>
+          <p class="form-hint">
+            Searches use the server’s X API access. These watchlists feed
+            Radwave’s shared pipeline.
+          </p>
+        </div>
+        <label class="source-tracking"
+          ><input type="checkbox" id="source-enabled" checked /> Enable source
+          tracking</label
+        >
         <div class="form-error" id="source-error" role="alert" hidden></div>
         <div class="form-footer">
           <span>Up to 20 entries per refresh by default.</span

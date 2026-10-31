@@ -10,6 +10,11 @@ const deadline = (days) => {
 };
 const fixtures = [
   {
+    url: "https://twitter.com/radwave_test/status/1234567890123456789",
+    organizer: "Radwave Security",
+    text: `CALL FOR APPLICATIONS: Open Source Security Bounty\nBug bounty applications are open for security researchers.\nApply now: https://apply.example.org/security-bounty\nApplication deadline: ${deadline(18)}`,
+  },
+  {
     url: "https://example.org/radar/green-ventures",
     organizer: "Green Ventures",
     text: `CALL FOR APPLICATIONS: Green Ventures Incubation Program\nApplications are open for young entrepreneurs who are building a more sustainable future through their businesses.\nLocation: Accra, Ghana\nEligibility\n1. Must be between 18-35 years of age\n2. Applicants from all countries may apply.\nBenefits\nMentorship and incubation support.\nApplication\nApply now: https://apply.example.org/green-ventures\nApplication deadline: ${deadline(4)}`,
@@ -286,4 +291,51 @@ test("globe regions open a focused workspace and keep discovery filters in sync"
       name: /Your next chapter,.*beautifully arranged\./,
     }),
   ).toBeVisible();
+});
+
+test("X announcements share Radwave's filters and source management", async ({
+  page,
+  isMobile,
+}, testInfo) => {
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Find opportunities", exact: true })
+    .click();
+  await page.locator('.channel-tab[data-platform="x"]').click();
+  await expect(page.locator(".opportunity-card")).toHaveCount(1);
+  await expect(page.locator(".source-mark.x-mark")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Open Source Security Bounty", exact: true })
+    .click();
+  await expect(page.locator("#detail-title")).toHaveText(
+    "Open Source Security Bounty",
+  );
+  await expect(page.locator(".detail-organizer")).toHaveText(
+    "Radwave Security",
+  );
+  await page.getByRole("button", { name: "Close opportunity details" }).click();
+  await goTo(page, "Sources & updates", isMobile);
+  await page.getByRole("button", { name: "Add an X watchlist" }).click();
+  await unlock(page);
+  await page
+    .getByLabel("Source name", { exact: true })
+    .fill(`X watchlist ${testInfo.project.name}`);
+  await page
+    .getByLabel("X search query", { exact: true })
+    .fill(
+      `fellowship apply -is:retweet lang:en #radwave_${testInfo.project.name}`,
+    );
+  await page.getByRole("button", { name: "Add to Radwave" }).click();
+  const row = page.locator(".source-row").filter({
+    has: page.getByRole("heading", {
+      name: `X watchlist ${testInfo.project.name}`,
+      exact: true,
+    }),
+  });
+  await expect(row).toBeVisible();
+  await expect(row.getByRole("switch")).toHaveAttribute(
+    "aria-checked",
+    "false",
+  );
+  await expect(page.locator("#x-connection")).toContainText("One Radwave");
 });

@@ -10,6 +10,46 @@ import (
 )
 
 var activityID = regexp.MustCompile(`(?:activity[-:]|share-)(\d{15,22})`)
+var xPostPath = regexp.MustCompile(`^/(?:[A-Za-z0-9_]{1,15}|i/web|i)/status/(\d{1,22})(?:/.*)?$`)
+var xUsername = regexp.MustCompile(`^[A-Za-z0-9_]{1,15}$`)
+
+func IsX(host string) bool {
+	host = strings.ToLower(strings.TrimSuffix(host, "."))
+	return host == "x.com" || host == "www.x.com" || host == "twitter.com" || host == "www.twitter.com" || host == "mobile.twitter.com"
+}
+
+func XPostID(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || !IsX(u.Hostname()) {
+		return ""
+	}
+	match := xPostPath.FindStringSubmatch(u.Path)
+	if len(match) > 1 {
+		return match[1]
+	}
+	return ""
+}
+
+func XProfile(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || !IsX(u.Hostname()) {
+		return ""
+	}
+	name := strings.Trim(u.Path, "/")
+	if xUsername.MatchString(name) && !modelReservedX(name) {
+		return name
+	}
+	return ""
+}
+
+func modelReservedX(name string) bool {
+	for _, reserved := range []string{"search", "home", "explore", "notifications", "messages", "settings", "intent", "i", "login", "signup", "hashtag", "compose"} {
+		if strings.EqualFold(name, reserved) {
+			return true
+		}
+	}
+	return false
+}
 
 func IsLinkedIn(host string) bool {
 	host = strings.ToLower(strings.TrimSuffix(host, "."))
@@ -64,6 +104,20 @@ func CanonicalURL(raw string) string {
 	}
 	if IsLinkedIn(u.Hostname()) {
 		u.Host, u.Scheme, u.RawQuery = "www.linkedin.com", "https", ""
+	} else if IsX(u.Hostname()) {
+		u.Host, u.Scheme = "x.com", "https"
+		if id := XPostID(raw); id != "" {
+			return "https://x.com/i/status/" + id
+		}
+		if strings.TrimRight(u.Path, "/") == "/search" {
+			search := url.Values{}
+			if query := q.Get("q"); query != "" {
+				search.Set("q", query)
+			}
+			u.RawQuery = search.Encode()
+		} else {
+			u.RawQuery = ""
+		}
 	} else {
 		u.RawQuery = q.Encode()
 	}
@@ -108,6 +162,17 @@ func LinkedInIdentity(raw string) string {
 
 func SourceKind(raw string) string {
 	u, err := url.Parse(raw)
+	if err == nil && IsX(u.Hostname()) {
+		if XPostID(raw) != "" {
+			return "x_post"
+		}
+		if strings.TrimRight(u.Path, "/") == "/search" {
+			return "x_search"
+		}
+		if XProfile(raw) != "" {
+			return "x_profile"
+		}
+	}
 	if err == nil && IsLinkedIn(u.Hostname()) {
 		if strings.HasPrefix(u.Path, "/posts/") || strings.Contains(u.Path, "/feed/update/") {
 			return "linkedin_post"

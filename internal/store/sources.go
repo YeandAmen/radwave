@@ -64,16 +64,21 @@ type storedSource struct {
 	model.Source
 	ETagValue     string `json:"etag_value"`
 	ModifiedValue string `json:"modified_value"`
+	SinceValue    string `json:"since_value"`
+	NextValue     string `json:"next_value"`
+	PendingValue  string `json:"pending_value"`
+	XUserValue    string `json:"x_user_value"`
 }
 
 func encodeSource(source model.Source) ([]byte, error) {
-	return json.Marshal(storedSource{Source: source, ETagValue: source.ETag, ModifiedValue: source.LastModified})
+	return json.Marshal(storedSource{Source: source, ETagValue: source.ETag, ModifiedValue: source.LastModified, SinceValue: source.SinceID, NextValue: source.NextToken, PendingValue: source.PendingSinceID, XUserValue: source.XUserID})
 }
 
 func decodeSource(raw []byte) (model.Source, error) {
 	var stored storedSource
 	err := json.Unmarshal(raw, &stored)
 	stored.Source.ETag, stored.Source.LastModified = stored.ETagValue, stored.ModifiedValue
+	stored.Source.SinceID, stored.Source.NextToken, stored.Source.PendingSinceID, stored.Source.XUserID = stored.SinceValue, stored.NextValue, stored.PendingValue, stored.XUserValue
 	return stored.Source, err
 }
 
@@ -126,6 +131,7 @@ func (s *Store) RecordSourceFetch(ctx context.Context, fetched model.Source) (mo
 		source.LastCrawledAt, source.NextCrawlAt = fetched.LastCrawledAt, fetched.NextCrawlAt
 		source.Failures, source.ItemCount = fetched.Failures, fetched.ItemCount
 		source.ETag, source.LastModified = fetched.ETag, fetched.LastModified
+		source.SinceID, source.NextToken, source.PendingSinceID, source.XUserID = fetched.SinceID, fetched.NextToken, fetched.PendingSinceID, fetched.XUserID
 	})
 }
 

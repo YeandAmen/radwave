@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 	"time"
 
@@ -9,8 +10,8 @@ import (
 )
 
 func (s *Store) Stats(ctx context.Context) (model.Stats, error) {
-	stats := model.Stats{Kinds: map[string]int{}, Regions: map[string]int{}}
-	rows, err := s.db.QueryContext(ctx, "SELECT kind,region,deadline,deadline_state,updated_at FROM opportunities")
+	stats := model.Stats{Kinds: map[string]int{}, Regions: map[string]int{}, Platforms: map[string]int{}}
+	rows, err := s.db.QueryContext(ctx, "SELECT kind,region,deadline,deadline_state,updated_at,json_extract(data,'$.source_kind') FROM opportunities")
 	if err != nil {
 		return stats, err
 	}
@@ -18,7 +19,8 @@ func (s *Store) Stats(ctx context.Context) (model.Stats, error) {
 	for rows.Next() {
 		var o model.Opportunity
 		var updated string
-		if err := rows.Scan(&o.Kind, &o.Region, &o.Deadline, &o.DeadlineState, &updated); err != nil {
+		var sourceKind sql.NullString
+		if err := rows.Scan(&o.Kind, &o.Region, &o.Deadline, &o.DeadlineState, &updated, &sourceKind); err != nil {
 			rows.Close()
 			return stats, err
 		}
@@ -28,6 +30,7 @@ func (s *Store) Stats(ctx context.Context) (model.Stats, error) {
 			stats.Available++
 			stats.Kinds[o.Kind]++
 			stats.Regions[o.Region]++
+			stats.Platforms[model.Platform(sourceKind.String)]++
 		}
 		if o.Status == "closing" {
 			stats.ClosingSoon++

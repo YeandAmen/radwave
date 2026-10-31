@@ -21,6 +21,7 @@ type Config struct {
 	CronSecret           string
 	Addr                 string
 	RequireSharedStorage bool
+	XBearerToken         string
 }
 
 type App struct {
@@ -45,6 +46,13 @@ func New(ctx context.Context, config Config) (*App, error) {
 		return nil, err
 	}
 	e := crawler.New(s, ingest.NewHTTPFetcher(20*time.Second, 2*time.Second), 30*time.Minute)
+	e.X = ingest.NewXClient(config.XBearerToken)
+	if e.X.Configured() {
+		if err := bootstrap.SeedX(ctx, s); err != nil {
+			s.Close()
+			return nil, err
+		}
+	}
 	app := &App{store: s, engine: e}
 	app.Handler = web.New(s, e, web.Config{
 		Addr: config.Addr, Context: ctx, AdminToken: config.AdminToken, CronSecret: config.CronSecret,

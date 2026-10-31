@@ -41,7 +41,8 @@ func (e *FetchError) Blocked() bool {
 
 func AccessBlocked(err error) bool {
 	var fetchError *FetchError
-	return errors.As(err, &fetchError) && fetchError.Blocked() || errors.Is(err, ErrNoPublicPost)
+	var xError *XAPIError
+	return errors.As(err, &fetchError) && fetchError.Blocked() || errors.Is(err, ErrNoPublicPost) || errors.Is(err, ErrXNotConfigured) || errors.As(err, &xError) && (xError.Status == 401 || xError.Status == 402 || xError.Status == 403 || xError.Status == 429)
 }
 
 type HTTPFetcher struct {

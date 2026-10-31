@@ -23,6 +23,7 @@ var ErrNotOpportunity = errors.New("no application or opportunity announcement w
 type Engine struct {
 	Store    *store.Store
 	Fetcher  ingest.Fetcher
+	X        ingest.XReader
 	Interval time.Duration
 	MaxItems int
 	Logger   *slog.Logger
@@ -227,6 +228,9 @@ func (e *Engine) HasDueSources(ctx context.Context) (bool, error) {
 }
 
 func (e *Engine) crawlSource(ctx context.Context, source model.Source, force bool) sourceResult {
+	if strings.HasPrefix(source.Kind, "x_") {
+		return e.crawlXSource(ctx, source)
+	}
 	result := sourceResult{warnings: []string{}}
 	headers := http.Header{}
 	if source.Kind == "rss" && !force {
@@ -338,6 +342,90 @@ func (e *Engine) crawlSource(ctx context.Context, source model.Source, force boo
 	return e.finishSource(ctx, source, result)
 }
 
+func (e *Engine) crawlXSource(ctx context.Context, source model.Source) sourceResult {
+	result := sourceResult{warnings: []string{}}
+	if source.Kind == "x_archive" {
+		result.err = errors.New("archived X imports are refreshed through a search, profile, or individual post source")
+		return e.finishSource(ctx, source, result)
+	}
+	if e.X == nil || !e.X.Configured() {
+		result.err = ingest.ErrXNotConfigured
+		return e.finishSource(ctx, source, result)
+	}
+	posts := []model.Post{}
+	var page ingest.XPage
+	var err error
+	if source.Kind == "x_post" {
+		var post model.Post
+		post, err = e.X.Post(ctx, ingest.XPostID(source.URL))
+		if err == nil {
+			posts = append(posts, post)
+		}
+	} else {
+		page, err = e.X.Page(ctx, source, e.MaxItems)
+		posts = page.Posts
+		result.warnings = append(result.warnings, page.Warnings...)
+	}
+	if err != nil {
+		result.err = err
+		return e.finishSource(ctx, source, result)
+	}
+	seen := map[string]bool{}
+	for _, post := range posts {
+		if !ingest.IsOpportunity(post) {
+			continue
+		}
+		id := ingest.XPostID(post.URL)
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		if err := e.savePost(ctx, post, source, &result); err != nil {
+			result.err = err
+			break
+		}
+	}
+	if result.err == nil && source.Kind != "x_post" {
+		known, _, lookupErr := e.Store.List(ctx, model.Query{Source: source.ID, Status: "all", Sort: "updated", Limit: 5})
+		if lookupErr != nil {
+			result.err = lookupErr
+		} else {
+			ids := []string{}
+			for _, record := range known {
+				id := ingest.XPostID(record.URL)
+				if id != "" && !seen[id] {
+					ids = append(ids, id)
+				}
+			}
+			if len(ids) > 0 {
+				refreshed, refreshErr := e.X.Posts(ctx, ids)
+				if refreshErr != nil {
+					result.warnings = append(result.warnings, "previous X post metrics could not be refreshed: "+refreshErr.Error())
+				} else {
+					for _, post := range refreshed {
+						if err := e.savePost(ctx, post, source, &result); err != nil {
+							result.err = err
+							break
+						}
+					}
+				}
+			}
+		}
+		if result.err == nil {
+			source.PendingSinceID = ingest.NewerXID(source.PendingSinceID, page.NewestID)
+			source.NextToken = page.NextToken
+			if source.NextToken == "" {
+				source.SinceID = ingest.NewerXID(source.SinceID, source.PendingSinceID)
+				source.PendingSinceID = ""
+			}
+			if page.UserID != "" {
+				source.XUserID = page.UserID
+			}
+		}
+	}
+	return e.finishSource(ctx, source, result)
+}
+
 func (e *Engine) savePost(ctx context.Context, post model.Post, source model.Source, result *sourceResult) error {
 	opportunity := ingest.Extract(post, source, time.Now())
 	upsert, err := e.Store.Upsert(ctx, opportunity)
@@ -375,6 +463,10 @@ func (e *Engine) finishSource(ctx context.Context, source model.Source, result s
 		}
 	}
 	next := now.Add(interval)
+	var xError *ingest.XAPIError
+	if errors.As(result.err, &xError) && xError.RetryAt != nil && xError.RetryAt.After(next) {
+		next = xError.RetryAt.Add(time.Second)
+	}
 	source.NextCrawlAt = &next
 	if _, err := e.Store.RecordSourceFetch(context.WithoutCancel(ctx), source); err != nil {
 		result.err = errors.Join(result.err, err)
@@ -438,30 +530,47 @@ func (e *Engine) Import(ctx context.Context, input ImportInput) (store.UpsertRes
 	if len(input.Text) > 250000 {
 		return store.UpsertResult{}, errors.New("post text exceeds the 250,000 character limit")
 	}
+	kind := ingest.SourceKind(input.URL)
 	post := model.Post{URL: ingest.CanonicalURL(input.URL), Body: strings.TrimSpace(input.Text), Title: input.Title, Author: input.Organizer, CaptureMethod: "manual_import"}
+	if strings.HasPrefix(kind, "x_") {
+		post.Author = ""
+	}
 	if post.Body != "" {
 		if known, err := e.Store.GetByURL(ctx, post.URL); err == nil {
 			post.URL = known.URL
+			if strings.HasPrefix(kind, "x_") {
+				post.Author = known.PostAuthor
+				if strings.TrimSpace(input.Organizer) == "" {
+					input.Organizer = known.Organizer
+				}
+			}
 		} else if !errors.Is(err, store.ErrNotFound) {
 			return store.UpsertResult{}, err
 		}
 	}
 	if post.Body == "" {
-		if kind := ingest.SourceKind(input.URL); kind == "rss" || kind == "linkedin_page" {
+		if kind == "rss" || kind == "linkedin_page" || kind == "x_profile" || kind == "x_search" {
 			return store.UpsertResult{}, errors.New("add feeds and profile/company pages under Sources; import an individual post or article here")
 		}
-		response, err := e.Fetcher.Fetch(ctx, input.URL, nil)
-		if err != nil {
-			return store.UpsertResult{}, err
+		if kind == "x_post" {
+			if e.X == nil {
+				return store.UpsertResult{}, ingest.ErrXNotConfigured
+			}
+			post, err = e.X.Post(ctx, ingest.XPostID(input.URL))
+		} else {
+			var response ingest.FetchResult
+			response, err = e.Fetcher.Fetch(ctx, input.URL, nil)
+			if err == nil {
+				post, err = ingest.ParsePage(response.Body, response.URL)
+			}
 		}
-		post, err = ingest.ParsePage(response.Body, response.URL)
 		if err != nil {
 			return store.UpsertResult{}, err
 		}
 		if input.Title != "" {
 			post.Title = input.Title
 		}
-		if input.Organizer != "" {
+		if input.Organizer != "" && !strings.HasPrefix(kind, "x_") {
 			post.Author = input.Organizer
 		}
 	}
@@ -472,16 +581,22 @@ func (e *Engine) Import(ctx context.Context, input ImportInput) (store.UpsertRes
 	if name == "" {
 		name = u.Hostname()
 	}
-	source, _, err := e.Store.AddSource(ctx, model.Source{URL: ingest.CanonicalURL(input.URL), Name: name, Kind: ingest.SourceKind(input.URL), Enabled: true})
+	enabled := !strings.HasPrefix(kind, "x_") || post.CaptureMethod == "x_api"
+	source, _, err := e.Store.AddSource(ctx, model.Source{URL: ingest.CanonicalURL(input.URL), Name: name, Kind: kind, Enabled: enabled})
 	if err != nil {
 		return store.UpsertResult{}, err
 	}
 	now := time.Now().UTC()
-	result, err := e.Store.Upsert(ctx, ingest.Extract(post, source, now))
+	opportunity := ingest.Extract(post, source, now)
+	if strings.HasPrefix(kind, "x_") && strings.TrimSpace(input.Organizer) != "" {
+		opportunity.Organizer = strings.TrimSpace(input.Organizer)
+		opportunity.Evidence["organizer"] = "Organizer supplied during import"
+	}
+	result, err := e.Store.Upsert(ctx, opportunity)
 	if err != nil {
 		return result, err
 	}
-	if post.CaptureMethod == "public_page" {
+	if post.CaptureMethod == "public_page" || post.CaptureMethod == "x_api" {
 		source.LastCrawledAt, source.Status, source.LastError, source.Failures, source.ItemCount = &now, "ok", "", 0, 1
 		next := now.Add(max(e.Interval, 30*time.Minute))
 		source.NextCrawlAt = &next
@@ -500,6 +615,27 @@ func ValidateSource(source model.Source) error {
 	}
 	if len(strings.TrimSpace(source.Name)) == 0 || len(source.Name) > 120 {
 		return errors.New("source name must be between 1 and 120 characters")
+	}
+	if strings.HasPrefix(source.Kind, "x_") {
+		if !ingest.IsX(u.Hostname()) {
+			return errors.New("X / Twitter sources must use an x.com or twitter.com URL")
+		}
+		switch source.Kind {
+		case "x_search":
+			if strings.TrimRight(u.Path, "/") != "/search" || strings.TrimSpace(u.Query().Get("q")) == "" || len(u.Query().Get("q")) > 512 {
+				return errors.New("X search needs https://x.com/search?q=... with a query of 1–512 characters")
+			}
+		case "x_profile":
+			if ingest.XProfile(source.URL) == "" {
+				return errors.New("use an X profile URL such as https://x.com/username")
+			}
+		case "x_post":
+			if ingest.XPostID(source.URL) == "" {
+				return errors.New("use an individual X post URL")
+			}
+		case "x_archive":
+			return errors.New("X archive sources are created by the legacy import command")
+		}
 	}
 	if strings.HasPrefix(source.Kind, "linkedin_") && !ingest.IsLinkedIn(u.Hostname()) {
 		return errors.New("LinkedIn sources must use a linkedin.com URL")

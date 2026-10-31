@@ -20,6 +20,9 @@ const labels = {
   internship: "Internships",
   competition: "Competitions",
   job: "Jobs",
+  bounty: "Bounties",
+  freelance: "Freelance",
+  research: "Research",
   training: "Training",
   conference: "Conferences",
   volunteering: "Volunteering",
@@ -32,6 +35,9 @@ const singular = {
   internship: "Internship",
   competition: "Competition",
   job: "Job",
+  bounty: "Bounty",
+  freelance: "Freelance",
+  research: "Research",
   training: "Training",
   conference: "Conference",
   volunteering: "Volunteering",
@@ -44,6 +50,9 @@ const kindIcons = {
   internship: "briefcase",
   competition: "trophy",
   job: "briefcase",
+  bounty: "trophy",
+  freelance: "briefcase",
+  research: "book",
   training: "book",
   conference: "users",
   volunteering: "heart",
@@ -53,12 +62,18 @@ const sourceLabels = {
   linkedin_page: "Public LinkedIn page",
   rss: "RSS / Atom feed",
   web_page: "Opportunity article",
+  x_search: "X / Twitter search",
+  x_profile: "X / Twitter profile",
+  x_post: "X / Twitter post",
+  x_archive: "Imported X archive",
 };
 const captures = {
   public_page: "Public page capture",
   rss_summary: "RSS summary",
   manual_import: "Text import",
   reference_import: "Reference snapshot",
+  x_api: "X API capture",
+  x_archive: "Imported X archive",
 };
 
 function readStorage(storage, key, fallback) {
@@ -87,6 +102,7 @@ const state = {
   kind: "",
   search: "",
   region: "",
+  platform: "",
   status: "active",
   sort: "deadline",
   offset: 0,
@@ -179,6 +195,8 @@ function kindPill(o) {
   return `<span class="kind-pill kind-${esc(o.kind)}">${icon(kindIcons[o.kind] || "sprout")}${esc(singular[o.kind] || "Program")}</span>`;
 }
 function sourceMark(kind) {
+  if (kind.startsWith("x_"))
+    return '<span class="source-mark x-mark" aria-label="X / Twitter">𝕏</span>';
   return kind.startsWith("linkedin")
     ? '<span class="source-mark linkedin" aria-label="LinkedIn">in</span>'
     : `<span class="source-mark feed">${icon("rss")}</span>`;
@@ -291,6 +309,7 @@ function updateMeta(meta) {
     ? "· REFRESHING"
     : "· PUBLIC SOURCES";
   renderTypes();
+  renderChannels();
   renderRegions();
   window.RadwaveGlobe?.setCounts(stats.regions);
   const select = $("#region");
@@ -329,6 +348,9 @@ function renderTypes() {
     "internship",
     "competition",
     "job",
+    "bounty",
+    "freelance",
+    "research",
     "training",
   ];
   $("#type-nav").innerHTML = sidebarKinds
@@ -370,6 +392,22 @@ function renderRegions() {
     .join("");
 }
 
+function renderChannels() {
+  const counts = state.meta?.stats.platforms || {};
+  $("#channel-tabs").innerHTML = [
+    ["", "All signals"],
+    ["linkedin", "LinkedIn"],
+    ["x", "X / Twitter"],
+    ["rss", "Feeds"],
+    ["web", "Articles"],
+  ]
+    .map(
+      ([key, label]) =>
+        `<button class="channel-tab${state.platform === key ? " active" : ""}" data-platform="${key}" aria-pressed="${state.platform === key}">${label}<span>${key ? counts[key] || 0 : state.meta?.stats.available || 0}</span></button>`,
+    )
+    .join("");
+}
+
 async function loadHorizon() {
   const data = await api(
     "/api/opportunities?status=active&sort=deadline&limit=8",
@@ -402,6 +440,7 @@ function params() {
   if (state.kind) query.set("kind", state.kind);
   if (state.search) query.set("q", state.search);
   if (state.region) query.set("region", state.region);
+  if (state.platform) query.set("platform", state.platform);
   if (state.page === "saved") query.set("ids", [...state.saved].join(","));
   return query;
 }
@@ -415,6 +454,13 @@ function updateFilters() {
   if (state.kind) chips.push(["kind", labels[state.kind]]);
   if (state.search) chips.push(["search", `“${state.search}”`]);
   if (state.region) chips.push(["region", state.region]);
+  if (state.platform)
+    chips.push([
+      "platform",
+      { x: "X / Twitter", linkedin: "LinkedIn", rss: "Feeds", web: "Articles" }[
+        state.platform
+      ],
+    ]);
   const target = $("#active-filters");
   target.hidden = chips.length === 0;
   target.innerHTML =
@@ -426,6 +472,7 @@ function updateFilters() {
       .join("") +
     '<button class="clear-filters" data-action="clear">Clear filters</button>';
   renderTypes();
+  renderChannels();
   renderRegions();
   window.RadwaveGlobe?.setRegion(state.region, false);
 }
@@ -527,6 +574,20 @@ function renderCards() {
     grid.innerHTML = `<div class="empty-state"><span class="empty-icon">${icon(symbol)}</span><h3>${heading}</h3><p>${text}</p>${action}</div>`;
   }
   $("#pagination").hidden = state.total <= state.pageSize;
+  $$(".opportunity-card", grid).forEach((element) => {
+    const record = state.items.find((item) => item.id === element.dataset.id);
+    if (record?.post_author) {
+      const publisher = $(".card-source>span:last-child", element);
+      if (publisher)
+        publisher.textContent = `${record.post_author} · ${record.source_name}`;
+    }
+    if (record?.reposts != null) {
+      const metric = document.createElement("span");
+      metric.title = "Reposts at capture time";
+      metric.textContent = `↻ ${record.reposts}`;
+      $(".engagement", element)?.append(metric);
+    }
+  });
   $("#page-summary").textContent =
     `${state.offset + 1}–${Math.min(state.offset + state.pageSize, state.total)} of ${state.total} opportunities`;
   $("#previous-page").disabled = state.offset === 0;
@@ -541,6 +602,7 @@ function navigate(page, kind = "") {
   state.kind = kind;
   state.search = "";
   state.region = "";
+  state.platform = "";
   state.offset = 0;
   state.status = page === "saved" ? "all" : "active";
   openWorkspace();
@@ -598,6 +660,7 @@ function home() {
   state.kind = "";
   state.search = "";
   state.region = "";
+  state.platform = "";
   state.status = "active";
   state.offset = 0;
   closeWorkspace();
@@ -629,6 +692,7 @@ function clearFilters() {
   state.kind = "";
   state.search = "";
   state.region = "";
+  state.platform = "";
   state.offset = 0;
   loadOpportunities();
 }
@@ -741,11 +805,34 @@ function renderDetail(o, history) {
             deltas.push(
               `Comments ${entry.comments_delta > 0 ? "+" : ""}${entry.comments_delta}`,
             );
+          if (entry.reposts_delta != null && entry.reposts_delta !== 0)
+            deltas.push(
+              `Reposts ${entry.reposts_delta > 0 ? "+" : ""}${entry.reposts_delta}`,
+            );
+          if (entry.quotes_delta != null && entry.quotes_delta !== 0)
+            deltas.push(
+              `Quotes ${entry.quotes_delta > 0 ? "+" : ""}${entry.quotes_delta}`,
+            );
           return `<div class="history-entry"><time datetime="${esc(entry.observed_at)}">${entry.capture_method === "reference_import" ? formatDate(entry.observed_at) : formatTime(entry.observed_at)}</time><strong>${esc(entry.changes?.join(" · ") || "Source checked · details unchanged")}</strong><p>${entry.reactions !== null ? `${Number(entry.reactions).toLocaleString()} reactions` : "Reaction count not exposed"}${entry.comments !== null ? ` · ${Number(entry.comments).toLocaleString()} comments` : ""}</p>${deltas.length ? `<div class="history-deltas">${deltas.map((delta) => `<span>${esc(delta)}</span>`).join("")}</div>` : ""}</div>`;
         })
         .join("") || "<p>No observation history yet.</p>"
     }</div></section></div>
     <div class="detail-footer"><button class="button button-quiet${saved ? " saved" : ""}" data-save="${esc(o.id)}" data-detail-save aria-pressed="${saved}">${icon("bookmark")}${saved ? "Saved to shortlist" : "Save opportunity"}</button>${applyURL ? `<a class="button button-primary" href="${esc(applyURL)}" target="_blank" rel="noopener noreferrer">${applyLabel}${icon("arrow-up-right")}</a>` : ""}</div>`;
+  if (o.post_author) {
+    if (!o.organizer)
+      $(".detail-organizer").textContent =
+        `Published by ${o.post_author} · ${o.source_name}`;
+    else {
+      const publisher = document.createElement("p");
+      publisher.textContent = `Published by ${o.post_author}`;
+      $(".detail-source-box").append(publisher);
+    }
+  }
+  if (o.reposts != null || o.quotes != null) {
+    const metrics = document.createElement("p");
+    metrics.textContent = `X engagement at capture: ${o.reactions ?? "unknown"} likes · ${o.comments ?? "unknown"} replies · ${o.reposts ?? "unknown"} reposts · ${o.quotes ?? "unknown"} quotes.`;
+    $(".detail-source-box").append(metrics);
+  }
 }
 
 async function loadSources() {
@@ -764,6 +851,7 @@ function renderSources(runs = null) {
     partial: "Partial capture",
     error: "Fetch failed",
     idle: "Not yet refreshed",
+    archive: "Imported archive",
   };
   $("#source-list").innerHTML = state.sources.length
     ? state.sources
@@ -780,6 +868,24 @@ function renderSources(runs = null) {
     : '<div class="empty-state"><span class="empty-icon">' +
       icon("radio") +
       '</span><h3>Open a new channel of possibility.</h3><p>Add a trusted opportunity feed or a public LinkedIn source to grow your radar.</p><button class="button button-primary" data-action="source">Add your first source</button></div>';
+  const connection = $("#x-connection");
+  const xSources = state.sources.filter((source) =>
+    source.kind.startsWith("x_"),
+  );
+  connection.hidden = false;
+  connection.innerHTML = `<strong>LinkedIn, X, and public feeds. One Radwave.</strong><p>${state.meta?.integrations?.x?.configured ? (xSources.some((source) => /credits|402/i.test(source.last_error)) ? "The X credential is configured. Discovery needs X API credits; prepared watchlists stay paused until you enable them." : "The X credential is configured. Add a search, profile, or post source to bring its opportunities into this feed.") : "X ingestion is ready to configure. Set X_BEARER_TOKEN in the server environment to enable API discovery; pasted X announcements can be imported now."}</p>`;
+  $("#source-list").insertAdjacentElement("beforebegin", connection);
+  connection.insertAdjacentElement("afterend", $(".x-source-actions"));
+  $$(".source-row").forEach((element) => {
+    const source = state.sources.find(
+      (item) => item.id === element.dataset.sourceId,
+    );
+    if (source?.kind.startsWith("x_"))
+      $(".source-main>.stat-icon", element).textContent = "𝕏";
+    if (source?.kind === "x_archive") {
+      $$("button", element).forEach((button) => (button.disabled = true));
+    }
+  });
   if (runs !== null)
     $("#run-list").innerHTML = runs.length
       ? runs
@@ -830,9 +936,43 @@ function openImport() {
 function openSource() {
   requireManagement(() => {
     $("#source-form").reset();
+    updateXSourceFields();
     $("#source-error").hidden = true;
     showDialog("source-dialog");
   });
+}
+
+function updateXSourceFields() {
+  const search = $("#source-kind").value === "x_search";
+  $("#x-search-fields").hidden = !search;
+  $("#x-search-query").required = search;
+  $("#source-url").required = !search;
+  if (search) syncXSourceURL();
+}
+
+function syncXSourceURL() {
+  if ($("#source-kind").value === "x_search")
+    $("#source-url").value =
+      "https://x.com/search?q=" +
+      encodeURIComponent($("#x-search-query").value.trim());
+}
+
+function useXWatchlist(preset) {
+  $("#source-kind").value = "x_search";
+  $("#x-search-query").value =
+    state.meta?.x_watchlists?.[preset] ||
+    "scholarship apply -is:retweet lang:en";
+  if (!$("#source-name").value)
+    $("#source-name").value =
+      "X · " +
+      {
+        funding: "Funding & fellowships",
+        programs: "Programs & hackathons",
+        careers: "Careers & research",
+        bounties: "Bounties",
+      }[preset];
+  $("#source-enabled").checked = false;
+  updateXSourceFields();
 }
 
 document.addEventListener("click", (event) => {
@@ -840,6 +980,12 @@ document.addEventListener("click", (event) => {
   if (!button) return;
   if (button.dataset.page) navigate(button.dataset.page);
   if (button.hasAttribute("data-region")) selectRegion(button.dataset.region);
+  if (button.hasAttribute("data-platform")) {
+    state.platform = button.dataset.platform;
+    state.offset = 0;
+    loadOpportunities();
+  }
+  if (button.dataset.xPreset) useXWatchlist(button.dataset.xPreset);
   if (button.hasAttribute("data-kind"))
     navigate("discover", button.dataset.kind);
   if (button.hasAttribute("data-tab")) {
@@ -913,6 +1059,20 @@ document.addEventListener("click", (event) => {
 
 $("#add-opportunity").addEventListener("click", openImport);
 $("#add-source").addEventListener("click", openSource);
+$("#add-x-source").addEventListener("click", () =>
+  requireManagement(() => {
+    $("#source-form").reset();
+    $("#source-error").hidden = true;
+    useXWatchlist("funding");
+    showDialog("source-dialog");
+  }),
+);
+$("#source-kind").addEventListener("change", () => {
+  if ($("#source-kind").value.startsWith("x_"))
+    $("#source-enabled").checked = false;
+  updateXSourceFields();
+});
+$("#x-search-query").addEventListener("input", syncXSourceURL);
 $("#refresh-all").addEventListener("click", () =>
   requireManagement(() => refresh()),
 );
@@ -1072,7 +1232,7 @@ $("#source-form").addEventListener("submit", (event) => {
           name: $("#source-name").value.trim(),
           url: $("#source-url").value.trim(),
           kind: $("#source-kind").value,
-          enabled: true,
+          enabled: $("#source-enabled").checked,
         }),
       });
       closeDialog("source-dialog");

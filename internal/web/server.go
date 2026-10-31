@@ -156,7 +156,9 @@ func (s *Server) meta(w http.ResponseWriter, r *http.Request) {
 		"name": "Radwave", "version": "0.2.0", "stats": stats, "last_run": latest,
 		"running": s.engine.Running() || running, "kinds": model.Kinds, "regions": model.Regions,
 		"storage": s.store.Kind(), "hosted": s.config.SynchronousCrawls,
-		"management": map[string]bool{"enabled": s.writable, "token_required": s.config.AdminToken != ""},
+		"integrations": map[string]any{"x": map[string]any{"configured": s.engine.X != nil && s.engine.X.Configured(), "api_access_required": true}},
+		"x_watchlists": ingest.XWatchlists,
+		"management":   map[string]bool{"enabled": s.writable, "token_required": s.config.AdminToken != ""},
 	})
 }
 
@@ -168,7 +170,7 @@ func query(r *http.Request) model.Query {
 	if status == "" {
 		status = "active"
 	}
-	q := model.Query{Search: v.Get("q"), Kind: v.Get("kind"), Region: v.Get("region"), Status: status, Source: v.Get("source"), Sort: v.Get("sort"), Limit: min(max(limit, 0), 200), Offset: min(max(offset, 0), 1000000)}
+	q := model.Query{Search: v.Get("q"), Kind: v.Get("kind"), Region: v.Get("region"), Status: status, Source: v.Get("source"), Platform: v.Get("platform"), Sort: v.Get("sort"), Limit: min(max(limit, 0), 200), Offset: min(max(offset, 0), 1000000)}
 	if ids := v.Get("ids"); ids != "" {
 		q.IDs = strings.Split(ids, ",")
 		if len(q.IDs) > 200 {
