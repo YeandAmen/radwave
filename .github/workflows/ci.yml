@@ -11,7 +11,7 @@ permissions:
 jobs:
   go:
     name: Go checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -24,7 +24,7 @@ jobs:
 
   browser:
     name: Desktop & mobile
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -44,3 +44,4 @@ jobs:
           name: browser-check-artifacts
           path: test-results/
           retention-days: 7
+          if-no-files-found: ignore
