@@ -18,7 +18,7 @@ func (s *Store) AddSource(ctx context.Context, source model.Source) (model.Sourc
 	}
 	defer tx.Rollback()
 	var raw []byte
-	err = tx.QueryRowContext(ctx, "SELECT data FROM sources WHERE url = ?", source.URL).Scan(&raw)
+	err = tx.QueryRowContext(ctx, s.db.lockRow("SELECT data FROM sources WHERE url = ?"), source.URL).Scan(&raw)
 	if err == nil {
 		existing, err := decodeSource(raw)
 		return existing, false, err
@@ -39,9 +39,21 @@ func (s *Store) AddSource(ctx context.Context, source model.Source) (model.Sourc
 	if err != nil {
 		return source, false, err
 	}
-	_, err = tx.ExecContext(ctx, "INSERT INTO sources(id,url,enabled,data) VALUES(?,?,?,?)", source.ID, source.URL, source.Enabled, encoded)
+	result, err := tx.ExecContext(ctx, "INSERT INTO sources(id,url,enabled,data) VALUES(?,?,?,?) ON CONFLICT DO NOTHING", source.ID, source.URL, source.Enabled, encoded)
 	if err != nil {
 		return source, false, err
+	}
+	if affected, err := result.RowsAffected(); err != nil {
+		return source, false, err
+	} else if affected == 0 {
+		if err := tx.QueryRowContext(ctx, "SELECT data FROM sources WHERE url = ?", source.URL).Scan(&raw); err != nil {
+			return source, false, err
+		}
+		source, err = decodeSource(raw)
+		if err != nil {
+			return source, false, err
+		}
+		return source, false, tx.Commit()
 	}
 	return source, true, tx.Commit()
 }
@@ -124,7 +136,7 @@ func (s *Store) modifySource(ctx context.Context, id string, change func(*model.
 	}
 	defer tx.Rollback()
 	var raw []byte
-	if err := tx.QueryRowContext(ctx, "SELECT data FROM sources WHERE id = ?", id).Scan(&raw); err != nil {
+	if err := tx.QueryRowContext(ctx, s.db.lockRow("SELECT data FROM sources WHERE id = ?"), id).Scan(&raw); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return model.Source{}, ErrNotFound
 		}

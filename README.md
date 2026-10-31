@@ -2,10 +2,12 @@
 
 **Good opportunities. Less noise.**
 
+**Live app: [opportunity-radar-yeandamen.vercel.app](https://opportunity-radar-yeandamen.vercel.app)**
+
 A Go-powered crawler and a calm, human-friendly dashboard for programs, scholarships, fellowships, grants, internships, competitions, and other opportunities around the world.
 
 [![CI](https://github.com/YeandAmen/opportunity-radar/actions/workflows/ci.yml/badge.svg)](https://github.com/YeandAmen/opportunity-radar/actions/workflows/ci.yml)
-[![Go](https://img.shields.io/badge/Go-1.24%2B-00ADD8?logo=go)](https://go.dev/)
+[![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ![Opportunity Radar dashboard](docs/dashboard-desktop.png)
@@ -24,7 +26,7 @@ The first version is source-based: it captures accessible content from the publi
 
 ## Quick start
 
-Go 1.24 or newer is required; Go 1.26 is used for the checks and container build.
+Go 1.26 or newer is required.
 
 ```sh
 git clone https://github.com/YeandAmen/opportunity-radar.git
@@ -129,6 +131,22 @@ Environment values are read from the process environment. `.env.example` documen
 
 ### Hosting and management access
 
+The live deployment runs the Go HTTP server on Vercel with a dedicated Neon PostgreSQL database. Its data, source state, and observation histories persist across function instances and redeployments.
+
+`cmd/server/main.go` is the Vercel entrypoint. It uses `PORT`, `DATABASE_URL`, `RADAR_ADMIN_TOKEN`, and `CRON_SECRET`. Hosted refreshes complete inside the request, and a shared database lease prevents overlapping crawls across instances. Neon connections use its secure WebSocket PostgreSQL transport.
+
+The **Refresh hosted opportunities** GitHub workflow invokes the protected `/api/cron` endpoint every 30 minutes. This provides regular updates on Vercel Hobby without depending on a process-local timer. Configure the repository variable `RADAR_PRODUCTION_URL` and secret `RADAR_CRON_SECRET`; the latter must match Vercel's `CRON_SECRET`.
+
+To migrate an existing SQLite radar into a fresh hosted database:
+
+```sh
+go run ./cmd/radar migrate -from data/radar.db -env-file /private/path/production.env
+```
+
+The migration copies source settings, opportunities, full observation history, and run reports. It refuses to overwrite a nonempty destination. PostgreSQL data is isolated in the `opportunity_radar` schema.
+
+For owner setup, `scripts/setup-cloud.cjs` provisions app-scoped management/cron secrets through the authenticated Vercel CLI and saves a private owner credential file. Secret values are not printed or committed.
+
 For a hosted instance, provide a management token and a persistent database path:
 
 ```sh
@@ -160,6 +178,7 @@ Compose binds the host port to localhost and persists SQLite in the `radar-data`
 | POST   | `/api/crawl`              | Start a background refresh, optionally by `source_id`.   |
 | POST   | `/api/unlock`             | Validate the configured management token.                |
 | GET    | `/api/runs`               | Recent crawl reports.                                    |
+| GET    | `/api/cron`               | Authenticated hosted refresh of sources that are due.    |
 | GET    | `/api/export?format=csv`  | CSV export; `json` is also supported.                    |
 | GET    | `/feed.xml`               | Recent non-closed opportunities as RSS.                  |
 | GET    | `/healthz`                | Database-backed health response.                         |

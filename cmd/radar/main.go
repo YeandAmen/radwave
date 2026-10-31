@@ -40,8 +40,8 @@ func run(args []string) error {
 		fmt.Println("Opportunity Radar v0.1.0")
 		return nil
 	}
-	if !model.Contains([]string{"serve", "crawl", "import", "export"}, command) {
-		return fmt.Errorf("unknown command %q; use serve, crawl, import, export, or version", command)
+	if !model.Contains([]string{"serve", "crawl", "import", "export", "migrate"}, command) {
+		return fmt.Errorf("unknown command %q; use serve, crawl, import, export, migrate, or version", command)
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	dbPath := flags.String("db", env("RADAR_DB", "data/radar.db"), "SQLite database path")
@@ -51,6 +51,7 @@ func run(args []string) error {
 	timeoutValue := flags.String("http-timeout", env("RADAR_HTTP_TIMEOUT", "25s"), "timeout per source request")
 	maxItems := flags.Int("max-items", 20, "maximum feed entries or public page links per source refresh (1-50)")
 	var addr, sourceID, importURL, textFile, title, organizer, format *string
+	var migrateFrom, envFile *string
 	var autoCrawl *bool
 	switch command {
 	case "serve":
@@ -65,6 +66,9 @@ func run(args []string) error {
 		organizer = flags.String("organizer", "", "optional organizer name")
 	case "export":
 		format = flags.String("format", "json", "json or csv")
+	case "migrate":
+		migrateFrom = flags.String("from", "data/radar.db", "source SQLite database to copy into an empty destination")
+		envFile = flags.String("env-file", "", "private environment file containing the hosted DATABASE_URL")
 	}
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -74,6 +78,25 @@ func run(args []string) error {
 	}
 	if flags.NArg() > 0 {
 		return errors.New("unexpected positional arguments")
+	}
+	if command == "migrate" {
+		if *envFile != "" {
+			if err := loadEnvironment(*envFile); err != nil {
+				return err
+			}
+		}
+		explicitDB := false
+		flags.Visit(func(f *flag.Flag) {
+			if f.Name == "db" {
+				explicitDB = true
+			}
+		})
+		if !explicitDB && os.Getenv("DATABASE_URL") != "" {
+			*dbPath = os.Getenv("DATABASE_URL")
+		}
+		if *dbPath == *migrateFrom {
+			return errors.New("specify a different destination with DATABASE_URL or -db")
+		}
 	}
 	interval, err := time.ParseDuration(*intervalValue)
 	if err != nil || interval < 0 {
@@ -97,6 +120,18 @@ func run(args []string) error {
 		return err
 	}
 	defer s.Close()
+	if command == "migrate" {
+		source, err := store.Open(*migrateFrom)
+		if err != nil {
+			return err
+		}
+		defer source.Close()
+		counts, err := source.CopyIntoEmpty(ctx, s)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(counts)
+	}
 	if *seed {
 		if err := bootstrap.Seed(ctx, s); err != nil {
 			return err
@@ -115,7 +150,7 @@ func run(args []string) error {
 		}
 		errorsCh := make(chan error, 1)
 		go func() { errorsCh <- server.ListenAndServe() }()
-		slog.Info("Opportunity Radar is ready", "url", "http://"+*addr, "database", *dbPath)
+		slog.Info("Opportunity Radar is ready", "url", "http://"+*addr, "storage", s.Kind())
 		if *autoCrawl {
 			go engine.Schedule(ctx, interval, true)
 		}

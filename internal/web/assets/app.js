@@ -666,20 +666,27 @@ function renderSources(runs = null) {
       : '<div class="run-row"><div class="run-copy"><strong>Your first refresh is ahead.</strong><p>Refresh a source to start its observation history.</p></div></div>';
 }
 async function refresh(sourceID = "") {
+  if (state.meta) {
+    state.meta.running = true;
+    updateMeta(state.meta);
+    renderSources();
+  }
   try {
-    await api("/api/crawl", {
+    const data = await api("/api/crawl", {
       method: "POST",
       body: JSON.stringify({ source_id: sourceID }),
     });
-    if (state.meta) {
-      state.meta.running = true;
-      updateManagement();
-      renderSources();
-    }
-    toast("Source refresh started. Follow its progress in Updates.");
+    toast(
+      data.run?.status === "running"
+        ? "Source refresh started. Follow its progress in Updates."
+        : data.run?.status === "completed"
+          ? `Refresh complete: ${data.run.created} new, ${data.run.updated} updated.`
+          : "Refresh finished. See source status for the captured results.",
+    );
     await poll(true);
   } catch (error) {
     toast(error.message, true);
+    await poll(true);
   }
 }
 

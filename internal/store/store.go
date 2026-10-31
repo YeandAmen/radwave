@@ -7,7 +7,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -20,9 +19,12 @@ import (
 
 var ErrNotFound = errors.New("record not found")
 
-type Store struct{ db *sql.DB }
+type Store struct{ db *database }
 
 func Open(path string) (*Store, error) {
+	if strings.HasPrefix(path, "postgres://") || strings.HasPrefix(path, "postgresql://") {
+		return openPostgres(path)
+	}
 	if path != ":memory:" && !strings.HasPrefix(path, "file:") {
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			return nil, err
@@ -36,7 +38,7 @@ func Open(path string) (*Store, error) {
 	// keeps :memory: databases shared by all requests. WAL handles readers in
 	// other processes; the busy timeout handles an occasional concurrent CLI.
 	db.SetMaxOpenConns(1)
-	s := &Store{db: db}
+	s := &Store{db: &database{DB: db}}
 	if err := s.migrate(); err != nil {
 		db.Close()
 		return nil, err
@@ -46,42 +48,11 @@ func Open(path string) (*Store, error) {
 
 func (s *Store) Close() error                   { return s.db.Close() }
 func (s *Store) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
-
-func (s *Store) migrate() error {
-	var version int
-	if err := s.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
-		return err
+func (s *Store) Kind() string {
+	if s.db.postgres {
+		return "PostgreSQL"
 	}
-	if version > 1 {
-		return fmt.Errorf("database schema %d is newer than this application supports", version)
-	}
-	_, err := s.db.Exec(`
-		PRAGMA journal_mode = WAL;
-		PRAGMA busy_timeout = 5000;
-		PRAGMA foreign_keys = ON;
-		CREATE TABLE IF NOT EXISTS opportunities (
-			id TEXT PRIMARY KEY, url TEXT NOT NULL UNIQUE, data BLOB NOT NULL,
-			kind TEXT NOT NULL, region TEXT NOT NULL, deadline TEXT NOT NULL,
-			deadline_state TEXT NOT NULL, published_at TEXT NOT NULL,
-			first_seen_at TEXT NOT NULL, updated_at TEXT NOT NULL,
-			reactions INTEGER, search_text TEXT NOT NULL
-		);
-		CREATE INDEX IF NOT EXISTS opportunity_deadline ON opportunities(deadline);
-		CREATE INDEX IF NOT EXISTS opportunity_kind ON opportunities(kind);
-		CREATE INDEX IF NOT EXISTS opportunity_region ON opportunities(region);
-		CREATE TABLE IF NOT EXISTS observations (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			opportunity_id TEXT NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
-			observed_at TEXT NOT NULL, data BLOB NOT NULL
-		);
-		CREATE INDEX IF NOT EXISTS observation_opportunity ON observations(opportunity_id, id DESC);
-		CREATE TABLE IF NOT EXISTS sources (
-			id TEXT PRIMARY KEY, url TEXT NOT NULL UNIQUE, enabled INTEGER NOT NULL, data BLOB NOT NULL
-		);
-		CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, started_at TEXT NOT NULL, data BLOB NOT NULL);
-		PRAGMA user_version = 1;
-	`)
-	return err
+	return "SQLite"
 }
 
 type UpsertResult struct {
@@ -97,7 +68,7 @@ func (s *Store) Upsert(ctx context.Context, incoming model.Opportunity) (UpsertR
 	}
 	defer tx.Rollback()
 	var raw []byte
-	err = tx.QueryRowContext(ctx, "SELECT data FROM opportunities WHERE id = ? OR url = ? LIMIT 1", incoming.ID, incoming.URL).Scan(&raw)
+	err = tx.QueryRowContext(ctx, s.db.lockRow("SELECT data FROM opportunities WHERE id = ? OR url = ? LIMIT 1"), incoming.ID, incoming.URL).Scan(&raw)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return UpsertResult{}, err
 	}

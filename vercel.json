@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "go",
+  "installCommand": "true",
+  "buildCommand": "go build -trimpath -ldflags='-s -w' -o \"${VERCEL_OUTPUT_FILE:-server}\" ./cmd/server",
+  "regions": ["iad1"]
+}

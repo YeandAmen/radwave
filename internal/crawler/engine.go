@@ -81,7 +81,15 @@ func (e *Engine) begin(ctx context.Context, sourceID string, force bool) (model.
 		return model.Run{}, nil, store.ErrNotFound
 	}
 	run := model.Run{ID: model.NewID("run"), StartedAt: now, Status: "running", Errors: []string{}}
+	acquired, err := e.Store.AcquireCrawlLease(ctx, run.ID, 10*time.Minute)
+	if err != nil {
+		return run, nil, err
+	}
+	if !acquired {
+		return model.Run{}, nil, ErrAlreadyRunning
+	}
 	if err := e.Store.SaveRun(ctx, run); err != nil {
+		e.Store.ReleaseCrawlLease(context.WithoutCancel(ctx), run.ID)
 		return run, nil, err
 	}
 	e.running, e.current = true, run
@@ -121,6 +129,41 @@ type sourceResult struct {
 }
 
 func (e *Engine) complete(ctx context.Context, sources []model.Source, force bool) (model.Run, error) {
+	e.mu.Lock()
+	owner := e.current.ID
+	e.mu.Unlock()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	heartbeatDone := make(chan struct{})
+	defer close(heartbeatDone)
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-heartbeatDone:
+				return
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				renewCtx, stop := context.WithTimeout(ctx, 10*time.Second)
+				owned, err := e.Store.RenewCrawlLease(renewCtx, owner, 10*time.Minute)
+				stop()
+				if err != nil || !owned {
+					e.Logger.Error("crawl lease could not be renewed", "error", err)
+					cancel()
+					return
+				}
+			}
+		}
+	}()
+	defer func() {
+		releaseCtx, stop := context.WithTimeout(context.Background(), 10*time.Second)
+		defer stop()
+		if err := e.Store.ReleaseCrawlLease(releaseCtx, owner); err != nil {
+			e.Logger.Error("release crawl lease", "error", err)
+		}
+	}()
 	jobs := make(chan model.Source, len(sources))
 	for _, source := range sources {
 		jobs <- source
@@ -167,6 +210,20 @@ func (e *Engine) complete(ctx context.Context, sources []model.Source, force boo
 	e.running = false
 	err := e.Store.SaveRun(context.WithoutCancel(ctx), e.current)
 	return e.current, err
+}
+
+func (e *Engine) HasDueSources(ctx context.Context) (bool, error) {
+	sources, err := e.Store.Sources(ctx)
+	if err != nil {
+		return false, err
+	}
+	now := time.Now()
+	for _, source := range sources {
+		if source.Enabled && (source.NextCrawlAt == nil || !source.NextCrawlAt.After(now)) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (e *Engine) crawlSource(ctx context.Context, source model.Source, force bool) sourceResult {

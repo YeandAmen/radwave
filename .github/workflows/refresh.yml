@@ -1,0 +1,27 @@
+name: Refresh hosted opportunities
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hosted-opportunity-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      RADAR_URL: ${{ vars.RADAR_PRODUCTION_URL }}
+      CRON_SECRET: ${{ secrets.RADAR_CRON_SECRET }}
+    steps:
+      - name: Refresh due sources on the hosted Go backend
+        run: >-
+          curl --fail-with-body --silent --show-error --max-time 270
+          --header "Authorization: Bearer $CRON_SECRET"
+          "$RADAR_URL/api/cron"

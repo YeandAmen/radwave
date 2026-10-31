@@ -1,6 +1,6 @@
 # Architecture
 
-Opportunity Radar is a Go application with an embedded HTML/CSS/JavaScript dashboard and a pure-Go SQLite database. It runs as one binary; Node.js is used only for development browser checks and screenshots.
+Opportunity Radar is a Go application with an embedded HTML/CSS/JavaScript dashboard. Standalone deployments use pure-Go SQLite; the Vercel deployment uses dedicated Neon PostgreSQL storage. It runs as one binary; Node.js is used only for development checks and deployment utilities.
 
 ```text
 RSS / Atom ──────┐
@@ -23,6 +23,7 @@ Pasted text ─────┘                                         │
 - `internal/store`: SQLite persistence, filtering, deduplication, and update histories.
 - `internal/bootstrap`: starter sources and the dated reference example.
 - `internal/web`: HTTP endpoints and the embedded dashboard.
+- `internal/deployment`: Vercel runtime configuration with shared storage and request-scoped refreshes.
 - `tests/browser`: isolated desktop/mobile functional and accessibility checks.
 
 ## Source pipeline
@@ -56,7 +57,9 @@ Access failures back off exponentially, capped at 24 hours. Blocked responses us
 
 ## Deployment model
 
-One process owns the scheduler for each database. Run one replica with a persistent disk for this version. Browser shortlists live in local storage, scoped to the dashboard's origin; the management token is held only in the browser tab's session storage.
+Standalone instances own a local scheduler. Vercel instances run refreshes inside authenticated HTTP requests, triggered every 30 minutes by GitHub Actions. A shared crawl lease with renewal coordinates instances; its expiry allows recovery after an interrupted invocation. Browser shortlists live in local storage, scoped to the dashboard's origin; the management token is held only in the browser tab's session storage.
+
+The PostgreSQL adapter namespaces tables in `opportunity_radar`, translates parameter bindings and JSON lookups, and uses row locks for updates. Transaction-level advisory locking serializes schema migration across cold starts. This works with Neon's transaction pooler; no connection-local search path is required. Secure WebSockets carry PostgreSQL traffic over HTTPS, including on networks where direct PostgreSQL ports are unavailable.
 
 The server listens on localhost by default. Listening on other interfaces without a management token gives a read-only dashboard. With a token configured, mutating API calls use bearer authentication. Browser writes are same-origin, and fetched destinations are checked against private/local IP ranges both before requests and while resolving redirects.
 

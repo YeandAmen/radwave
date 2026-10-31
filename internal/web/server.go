@@ -26,9 +26,12 @@ import (
 var assets embed.FS
 
 type Config struct {
-	Addr       string
-	AdminToken string
-	Context    context.Context
+	Addr              string
+	AdminToken        string
+	Context           context.Context
+	SynchronousCrawls bool
+	CronSecret        string
+	CrawlTimeout      time.Duration
 }
 
 type Server struct {
@@ -59,6 +62,7 @@ func New(s *store.Store, engine *crawler.Engine, config Config) *Server {
 	server.mux.HandleFunc("POST /api/sources", server.write(server.addSource))
 	server.mux.HandleFunc("PATCH /api/sources/{id}", server.write(server.configureSource))
 	server.mux.HandleFunc("POST /api/crawl", server.write(server.crawl))
+	server.mux.HandleFunc("GET /api/cron", server.cron)
 	server.mux.HandleFunc("POST /api/import", server.write(server.importPost))
 	server.mux.HandleFunc("POST /api/unlock", server.write(func(w http.ResponseWriter, _ *http.Request) {
 		respond(w, http.StatusOK, map[string]bool{"unlocked": true})
@@ -143,9 +147,15 @@ func (s *Server) meta(w http.ResponseWriter, r *http.Request) {
 	if len(runs) > 0 {
 		latest = &runs[0]
 	}
+	running, err := s.store.CrawlRunning(r.Context())
+	if err != nil {
+		internalError(w)
+		return
+	}
 	respond(w, http.StatusOK, map[string]any{
 		"name": "Opportunity Radar", "version": "0.1.0", "stats": stats, "last_run": latest,
-		"running": s.engine.Running(), "kinds": model.Kinds, "regions": model.Regions,
+		"running": s.engine.Running() || running, "kinds": model.Kinds, "regions": model.Regions,
+		"storage": s.store.Kind(), "hosted": s.config.SynchronousCrawls,
 		"management": map[string]bool{"enabled": s.writable, "token_required": s.config.AdminToken != ""},
 	})
 }
@@ -272,6 +282,10 @@ func (s *Server) crawl(w http.ResponseWriter, r *http.Request) {
 	if r.ContentLength != 0 && !decode(w, r, &input) {
 		return
 	}
+	if s.config.SynchronousCrawls {
+		s.crawlInRequest(w, r, input.SourceID, true)
+		return
+	}
 	run, err := s.engine.Start(s.config.Context, input.SourceID, true)
 	if err != nil {
 		if errors.Is(err, crawler.ErrAlreadyRunning) {
@@ -282,6 +296,43 @@ func (s *Server) crawl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respond(w, http.StatusAccepted, map[string]any{"run": run})
+}
+
+func (s *Server) cron(w http.ResponseWriter, r *http.Request) {
+	secret := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if s.config.CronSecret == "" || subtle.ConstantTimeCompare([]byte(secret), []byte(s.config.CronSecret)) != 1 {
+		fail(w, http.StatusUnauthorized, "cron authentication required")
+		return
+	}
+	due, err := s.engine.HasDueSources(r.Context())
+	if err != nil {
+		internalError(w)
+		return
+	}
+	if !due {
+		respond(w, http.StatusOK, map[string]any{"skipped": true, "reason": "no sources are due"})
+		return
+	}
+	s.crawlInRequest(w, r, "", false)
+}
+
+func (s *Server) crawlInRequest(w http.ResponseWriter, r *http.Request, sourceID string, force bool) {
+	timeout := s.config.CrawlTimeout
+	if timeout <= 0 {
+		timeout = 230 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
+	defer cancel()
+	run, err := s.engine.Run(ctx, sourceID, force)
+	if err != nil {
+		if errors.Is(err, crawler.ErrAlreadyRunning) {
+			fail(w, http.StatusConflict, err.Error())
+		} else {
+			recordError(w, err)
+		}
+		return
+	}
+	respond(w, http.StatusOK, map[string]any{"run": run})
 }
 
 func (s *Server) importPost(w http.ResponseWriter, r *http.Request) {

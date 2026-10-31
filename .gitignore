@@ -11,3 +11,7 @@
 *.db-wal
 *.log
 .DS_Store
+.vercel
+.env*
+!.env.example
+/server
