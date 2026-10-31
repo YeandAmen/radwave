@@ -42,6 +42,10 @@ func (e *FetchError) Blocked() bool {
 func AccessBlocked(err error) bool {
 	var fetchError *FetchError
 	var xError *XAPIError
+	var jobError *JobAccessError
+	if errors.Is(err, ErrNoPublicJob) || errors.As(err, &jobError) && (len(jobError.Missing) > 0 || jobError.Status == 401 || jobError.Status == 402 || jobError.Status == 403 || jobError.Status == 429) {
+		return true
+	}
 	return errors.As(err, &fetchError) && fetchError.Blocked() || errors.Is(err, ErrNoPublicPost) || errors.Is(err, ErrXNotConfigured) || errors.As(err, &xError) && (xError.Status == 401 || xError.Status == 402 || xError.Status == 403 || xError.Status == 429)
 }
 

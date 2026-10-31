@@ -7,9 +7,12 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+
+	"github.com/YeandAmen/radwave/internal/model"
 )
 
 var activityID = regexp.MustCompile(`(?:activity[-:]|share-)(\d{15,22})`)
+var linkedinJobPath = regexp.MustCompile(`^/jobs/view/(?:[^/]*-)?(\d{1,22})(?:/.*)?$`)
 var xPostPath = regexp.MustCompile(`^/(?:[A-Za-z0-9_]{1,15}|i/web|i)/status/(\d{1,22})(?:/.*)?$`)
 var xUsername = regexp.MustCompile(`^[A-Za-z0-9_]{1,15}$`)
 
@@ -56,6 +59,17 @@ func IsLinkedIn(host string) bool {
 	return host == "linkedin.com" || strings.HasSuffix(host, ".linkedin.com")
 }
 
+func LinkedInJobID(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || !IsLinkedIn(u.Hostname()) {
+		return ""
+	}
+	if match := linkedinJobPath.FindStringSubmatch(u.Path); len(match) > 1 {
+		return match[1]
+	}
+	return ""
+}
+
 // ValidateURL also protects the import/source endpoints from fetching local
 // services. DNS and redirect destinations are checked again by HTTPFetcher.
 func ValidateURL(raw string) (*url.URL, error) {
@@ -98,12 +112,24 @@ func CanonicalURL(raw string) string {
 	u.Host = strings.ToLower(u.Host)
 	q := u.Query()
 	for key := range q {
-		if strings.HasPrefix(strings.ToLower(key), "utm_") || key == "trk" || key == "rcm" || key == "fbclid" || key == "gclid" || key == "ref" {
+		if strings.HasPrefix(strings.ToLower(key), "utm_") || key == "trk" || key == "rcm" || key == "fbclid" || key == "gclid" {
 			q.Del(key)
 		}
 	}
 	if IsLinkedIn(u.Hostname()) {
 		u.Host, u.Scheme, u.RawQuery = "www.linkedin.com", "https", ""
+		if id := LinkedInJobID(raw); id != "" {
+			return "https://www.linkedin.com/jobs/view/" + id
+		}
+		if strings.HasPrefix(u.Path, "/jobs/search") {
+			search := url.Values{}
+			for _, key := range []string{"keywords", "location", "geoId", "f_TPR", "f_E", "f_JT", "f_WT", "sortBy"} {
+				if value := q.Get(key); value != "" {
+					search.Set(key, value)
+				}
+			}
+			u.RawQuery = search.Encode()
+		}
 	} else if IsX(u.Hostname()) {
 		u.Host, u.Scheme = "x.com", "https"
 		if id := XPostID(raw); id != "" {
@@ -153,6 +179,9 @@ func UnwrapLink(raw, base string) string {
 }
 
 func LinkedInIdentity(raw string) string {
+	if id := LinkedInJobID(raw); id != "" {
+		return "linkedin-job-" + id
+	}
 	matches := activityID.FindStringSubmatch(raw)
 	if len(matches) > 1 {
 		return "linkedin-" + matches[1]
@@ -174,10 +203,25 @@ func SourceKind(raw string) string {
 		}
 	}
 	if err == nil && IsLinkedIn(u.Hostname()) {
+		if LinkedInJobID(raw) != "" {
+			return "linkedin_job"
+		}
+		if strings.HasPrefix(u.Path, "/jobs") || strings.HasPrefix(u.Path, "/company/") && strings.HasSuffix(strings.TrimRight(u.Path, "/"), "/jobs") {
+			return "linkedin_jobs"
+		}
 		if strings.HasPrefix(u.Path, "/posts/") || strings.Contains(u.Path, "/feed/update/") {
 			return "linkedin_post"
 		}
 		return "linkedin_page"
+	}
+	if err == nil {
+		endpoint := *u
+		endpoint.RawQuery = ""
+		for _, provider := range JobProviders {
+			if ValidateJobSource(model.Source{URL: endpoint.String(), Kind: provider.Kind}) == nil {
+				return provider.Kind
+			}
+		}
 	}
 	if strings.Contains(strings.ToLower(raw), "/feed") || strings.HasSuffix(strings.ToLower(raw), ".xml") || strings.HasSuffix(strings.ToLower(raw), ".rss") {
 		return "rss"

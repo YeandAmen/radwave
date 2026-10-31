@@ -28,6 +28,9 @@ var (
 )
 
 func IsOpportunity(p model.Post) bool {
+	if p.Job != nil {
+		return true
+	}
 	if opportunityRE.MatchString(p.Body) {
 		return true
 	}
@@ -52,6 +55,26 @@ func Extract(p model.Post, source model.Source, now time.Time) model.Opportunity
 		CaptureMethod: p.CaptureMethod, ExtractionVersion: "rules-1", PublishedAt: p.PublishedAt,
 		FirstSeenAt: now.UTC(), UpdatedAt: now.UTC(), LastFetchedAt: now.UTC(), Reactions: p.Reactions, Comments: p.Comments,
 		Reposts: p.Reposts, Quotes: p.Quotes,
+	}
+	if p.Identity != "" {
+		o.ID = p.Identity
+	}
+	if p.Job != nil {
+		job := *p.Job
+		if job.Salary == "" {
+			if match := salaryLine.FindStringSubmatch(body); len(match) > 1 {
+				job.Salary = strings.TrimSpace(match[1])
+			}
+		}
+		if job.EmploymentType == "" {
+			if match := employmentLine.FindStringSubmatch(body); len(match) > 1 {
+				job.EmploymentType = strings.TrimSpace(match[1])
+			}
+		}
+		o.Job, o.Kind = &job, "job"
+		if jobInternship.MatchString(p.Title + " " + job.EmploymentType) {
+			o.Kind = "internship"
+		}
 	}
 	if IsLinkedInHost(p.URL) {
 		if id := LinkedInIdentity(p.URL); id != "" {
@@ -98,6 +121,30 @@ func Extract(p model.Post, source model.Source, now time.Time) model.Opportunity
 		delete(o.Evidence, "application_url")
 	}
 	o.Tags = tags(title + " " + body)
+	if p.Job != nil {
+		if p.Location != "" {
+			o.Location, o.Evidence["location"] = model.CleanSpace(p.Location), "Location supplied by the job source: "+p.Location
+		}
+		if deadline := jobISODate(p.Deadline); deadline != "" {
+			label := p.Job.DeadlineLabel
+			if label == "" {
+				label = "Application closing date"
+			}
+			o.Deadline, o.DeadlineState, o.DeadlineText = deadline, "dated", label+": "+deadline
+			o.Evidence["deadline"] = o.DeadlineText
+		}
+		if application := validJobApplication(p.ApplicationURL); application != "" {
+			o.ApplicationURL, o.Evidence["application_url"] = application, "Application URL supplied by the job source"
+		}
+		if o.Job.Salary != "" {
+			o.Evidence["salary"] = o.Job.Salary + " (job source wording)"
+		}
+		if o.Job.EmploymentType != "" {
+			o.Evidence["employment_type"] = o.Job.EmploymentType
+		}
+		o.Funding = ""
+		delete(o.Evidence, "funding")
+	}
 	if o.DeadlineState == "unknown" {
 		o.Missing = append(o.Missing, "confirmed deadline")
 	}
@@ -105,7 +152,11 @@ func Extract(p model.Post, source model.Source, now time.Time) model.Opportunity
 		o.Missing = append(o.Missing, "eligibility requirements")
 	}
 	if o.Location == "" {
-		o.Missing = append(o.Missing, "program location")
+		label := "program location"
+		if p.Job != nil {
+			label = "job location"
+		}
+		o.Missing = append(o.Missing, label)
 	}
 	if o.ApplicationURL == "" {
 		o.Missing = append(o.Missing, "direct application link")

@@ -152,6 +152,7 @@ func run(args []string) error {
 		}
 	}
 	engine := crawler.New(s, ingest.NewHTTPFetcher(timeout, delay), interval)
+	engine.Jobs = ingest.NewJobClient(ingest.JobCredentials{AdzunaAppID: os.Getenv("ADZUNA_APP_ID"), AdzunaAppKey: os.Getenv("ADZUNA_APP_KEY"), USAJobsAPIKey: os.Getenv("USAJOBS_API_KEY"), USAJobsEmail: os.Getenv("USAJOBS_EMAIL"), ReedAPIKey: os.Getenv("REED_API_KEY"), JoobleAPIKey: os.Getenv("JOOBLE_API_KEY")})
 	engine.X = ingest.NewXClient(env("X_BEARER_TOKEN", os.Getenv("TWITTER_BEARER_TOKEN")))
 	if *seed && engine.X.Configured() {
 		if err := bootstrap.SeedX(ctx, s); err != nil {
@@ -172,7 +173,7 @@ func run(args []string) error {
 		go func() { errorsCh <- server.ListenAndServe() }()
 		slog.Info("Radwave is ready", "url", "http://"+*addr, "storage", s.Kind())
 		if *autoCrawl {
-			go engine.Schedule(ctx, interval, true)
+			go engine.Schedule(ctx, min(interval, 5*time.Minute), true)
 		}
 		select {
 		case <-ctx.Done():

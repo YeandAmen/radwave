@@ -33,6 +33,11 @@ func ParsePage(data []byte, pageURL string) (model.Post, error) {
 	}
 	linkedIn := IsLinkedInHost(pageURL)
 	for _, node := range jsonLD(doc) {
+		if hasType(node, "JobPosting") {
+			if job, err := jobPosting(node, post); err == nil {
+				return job, nil
+			}
+		}
 		if !hasType(node, "SocialMediaPosting") && !(hasType(node, "Article") || hasType(node, "NewsArticle") || hasType(node, "BlogPosting")) {
 			continue
 		}
@@ -65,6 +70,9 @@ func ParsePage(data []byte, pageURL string) (model.Post, error) {
 	}
 	if post.Title == "" {
 		post.Title = model.CleanSpace(doc.Find("h1").First().Text())
+	}
+	if linkedIn && LinkedInJobID(pageURL) != "" {
+		return linkedInJobFallback(doc, post)
 	}
 	if linkedIn {
 		content := doc.Find(`[data-test-id="main-feed-activity-card__commentary"]`).First()

@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/YeandAmen/radwave/internal/bootstrap"
 	"github.com/YeandAmen/radwave/internal/crawler"
 	"github.com/YeandAmen/radwave/internal/ingest"
 	"github.com/YeandAmen/radwave/internal/model"
@@ -152,13 +153,19 @@ func (s *Server) meta(w http.ResponseWriter, r *http.Request) {
 		internalError(w)
 		return
 	}
+	providers := []map[string]any{}
+	for _, provider := range ingest.JobProviders {
+		providers = append(providers, map[string]any{"kind": provider.Kind, "name": provider.Name, "url": provider.URL, "docs_url": provider.DocsURL, "credentials": provider.Credentials, "interval_minutes": provider.IntervalMinutes, "note": provider.Note, "configured": s.engine.Jobs != nil && s.engine.Jobs.Configured(provider.Kind)})
+	}
 	respond(w, http.StatusOK, map[string]any{
 		"name": "Radwave", "version": "0.2.0", "stats": stats, "last_run": latest,
 		"running": s.engine.Running() || running, "kinds": model.Kinds, "regions": model.Regions,
 		"storage": s.store.Kind(), "hosted": s.config.SynchronousCrawls,
-		"integrations": map[string]any{"x": map[string]any{"configured": s.engine.X != nil && s.engine.X.Configured(), "api_access_required": true}},
-		"x_watchlists": ingest.XWatchlists,
-		"management":   map[string]bool{"enabled": s.writable, "token_required": s.config.AdminToken != ""},
+		"integrations":   map[string]any{"x": map[string]any{"configured": s.engine.X != nil && s.engine.X.Configured(), "api_access_required": true}},
+		"x_watchlists":   ingest.XWatchlists,
+		"job_providers":  providers,
+		"source_presets": bootstrap.JobSources(),
+		"management":     map[string]bool{"enabled": s.writable, "token_required": s.config.AdminToken != ""},
 	})
 }
 
@@ -214,10 +221,11 @@ func (s *Server) sources(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) addSource(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		Name    string `json:"name"`
-		URL     string `json:"url"`
-		Kind    string `json:"kind"`
-		Enabled *bool  `json:"enabled"`
+		Name            string `json:"name"`
+		URL             string `json:"url"`
+		Kind            string `json:"kind"`
+		Enabled         *bool  `json:"enabled"`
+		IntervalMinutes int    `json:"interval_minutes"`
 	}
 	if !decode(w, r, &input) {
 		return
@@ -226,7 +234,16 @@ func (s *Server) addSource(w http.ResponseWriter, r *http.Request) {
 	if kind == "" {
 		kind = ingest.SourceKind(input.URL)
 	}
-	source := model.Source{Name: strings.TrimSpace(input.Name), URL: strings.TrimSpace(input.URL), Kind: kind, Enabled: input.Enabled == nil || *input.Enabled}
+	source := model.Source{Name: strings.TrimSpace(input.Name), URL: strings.TrimSpace(input.URL), Kind: kind, Enabled: input.Enabled == nil || *input.Enabled, IntervalMinutes: input.IntervalMinutes}
+	if provider, ok := ingest.JobProviderFor(kind); ok {
+		if source.IntervalMinutes == 0 {
+			source.IntervalMinutes = provider.IntervalMinutes
+		}
+		if input.Enabled == nil && (s.engine.Jobs == nil || !s.engine.Jobs.Configured(kind)) {
+			source.Enabled = false
+			source.LastError = "Configure " + strings.Join(provider.Credentials, " and ") + " in the server environment, then enable this source."
+		}
+	}
 	if err := crawler.ValidateSource(source); err != nil {
 		fail(w, http.StatusBadRequest, err.Error())
 		return

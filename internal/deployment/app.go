@@ -22,6 +22,7 @@ type Config struct {
 	Addr                 string
 	RequireSharedStorage bool
 	XBearerToken         string
+	JobCredentials       ingest.JobCredentials
 }
 
 type App struct {
@@ -46,6 +47,7 @@ func New(ctx context.Context, config Config) (*App, error) {
 		return nil, err
 	}
 	e := crawler.New(s, ingest.NewHTTPFetcher(20*time.Second, 2*time.Second), 30*time.Minute)
+	e.Jobs = ingest.NewJobClient(config.JobCredentials)
 	e.X = ingest.NewXClient(config.XBearerToken)
 	if e.X.Configured() {
 		if err := bootstrap.SeedX(ctx, s); err != nil {

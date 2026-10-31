@@ -21,6 +21,56 @@
   padding: 12px 0 15px;
   border-top: 1px solid var(--line);
 }
+.job-source-intro {
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  margin: 18px 0;
+}
+.job-source-intro strong {
+  font-size: 13px;
+  font-weight: 400;
+}
+.job-source-intro p,
+.job-provider-status {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+  margin: 8px 0;
+}
+.job-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 12px 0;
+}
+.job-presets button {
+  font-size: 11px;
+  min-height: 30px;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.job-presets button.active {
+  color: var(--copper);
+}
+.job-attribution {
+  display: inline-flex;
+  align-items: center;
+  min-width: 116px;
+  min-height: 23px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.job-posted {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  padding-top: 8px;
+}
 .channel-tab {
   display: flex;
   align-items: baseline;

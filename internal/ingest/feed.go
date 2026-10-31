@@ -7,6 +7,8 @@ import (
 	"html"
 	"strings"
 
+	"golang.org/x/net/html/charset"
+
 	"github.com/YeandAmen/radwave/internal/model"
 )
 
@@ -44,6 +46,7 @@ func ParseFeed(data []byte, feedURL string, limit int) ([]model.Post, error) {
 		Entries []atomEntry `xml:"entry"`
 	}
 	decoder := xml.NewDecoder(bytes.NewReader(data))
+	decoder.CharsetReader = charset.NewReaderLabel
 	if err := decoder.Decode(&document); err != nil {
 		return nil, errors.New("the source did not return a readable RSS or Atom feed: " + err.Error())
 	}

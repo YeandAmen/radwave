@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -24,6 +25,7 @@ type Engine struct {
 	Store    *store.Store
 	Fetcher  ingest.Fetcher
 	X        ingest.XReader
+	Jobs     ingest.JobReader
 	Interval time.Duration
 	MaxItems int
 	Logger   *slog.Logger
@@ -81,6 +83,10 @@ func (e *Engine) begin(ctx context.Context, sourceID string, force bool) (model.
 	if !found {
 		return model.Run{}, nil, store.ErrNotFound
 	}
+	// Lightweight API responses surface new jobs before slower article expansion.
+	sort.SliceStable(selected, func(i, j int) bool {
+		return strings.HasPrefix(selected[i].Kind, "jobs_") && !strings.HasPrefix(selected[j].Kind, "jobs_")
+	})
 	run := model.Run{ID: model.NewID("run"), StartedAt: now, Status: "running", Errors: []string{}}
 	acquired, err := e.Store.AcquireCrawlLease(ctx, run.ID, 10*time.Minute)
 	if err != nil {
@@ -228,12 +234,15 @@ func (e *Engine) HasDueSources(ctx context.Context) (bool, error) {
 }
 
 func (e *Engine) crawlSource(ctx context.Context, source model.Source, force bool) sourceResult {
+	if strings.HasPrefix(source.Kind, "jobs_") {
+		return e.crawlJobSource(ctx, source)
+	}
 	if strings.HasPrefix(source.Kind, "x_") {
 		return e.crawlXSource(ctx, source)
 	}
 	result := sourceResult{warnings: []string{}}
 	headers := http.Header{}
-	if source.Kind == "rss" && !force {
+	if (source.Kind == "rss" || source.Kind == "rss_jobs") && !force {
 		if source.ETag != "" {
 			headers.Set("If-None-Match", source.ETag)
 		}
@@ -250,13 +259,20 @@ func (e *Engine) crawlSource(ctx context.Context, source model.Source, force boo
 		result.seen = source.ItemCount
 		return e.finishSource(ctx, source, result)
 	}
-	if source.Kind == "rss" {
-		posts, err := ingest.ParseFeed(response.Body, response.URL, e.MaxItems)
+	if source.Kind == "rss" || source.Kind == "rss_jobs" {
+		limit := e.MaxItems
+		if source.Kind == "rss_jobs" {
+			limit = min(limit, 10)
+		}
+		posts, err := ingest.ParseFeed(response.Body, response.URL, limit)
 		if err != nil {
 			result.err = err
 			return e.finishSource(ctx, source, result)
 		}
 		for _, entry := range posts {
+			if source.Kind == "rss_jobs" {
+				entry.Job = &model.JobDetails{}
+			}
 			if ctx.Err() != nil {
 				result.err = ctx.Err()
 				break
@@ -264,11 +280,29 @@ func (e *Engine) crawlSource(ctx context.Context, source model.Source, force boo
 			if !ingest.IsOpportunity(entry) {
 				continue
 			}
+			// University career feeds often contain the complete description,
+			// salary and closing date. Keep that evidence and avoid a slower
+			// portal fetch that may only expose an index or access block.
+			if source.Kind == "rss_jobs" && len(entry.Body) >= 1000 {
+				if err := e.savePost(ctx, entry, source, &result); err != nil {
+					result.err = err
+					break
+				}
+				continue
+			}
 			post := entry
 			article, fetchErr := e.Fetcher.Fetch(ctx, entry.URL, nil)
 			if fetchErr == nil {
 				full, parseErr := ingest.ParsePage(article.Body, article.URL)
 				if parseErr == nil {
+					if source.Kind == "rss_jobs" && full.Job == nil {
+						full.Job = entry.Job
+					}
+					if source.Kind == "rss_jobs" {
+						// Career portals often canonicalize every vacancy to an index
+						// page. The feed's listing URL/title remain authoritative.
+						full.URL, full.Title = entry.URL, entry.Title
+					}
 					full.Categories = append(full.Categories, entry.Categories...)
 					if full.Title == "" {
 						full.Title = entry.Title
@@ -302,8 +336,13 @@ func (e *Engine) crawlSource(ctx context.Context, source model.Source, force boo
 		} else {
 			source.ETag, source.LastModified = "", ""
 		}
-	} else if source.Kind == "linkedin_page" {
-		links, err := ingest.DiscoverLinkedIn(response.Body, response.URL, e.MaxItems)
+	} else if source.Kind == "linkedin_page" || source.Kind == "linkedin_jobs" {
+		discover := ingest.DiscoverLinkedIn
+		limit := e.MaxItems
+		if source.Kind == "linkedin_jobs" {
+			discover, limit = ingest.DiscoverLinkedInJobs, min(limit, 10)
+		}
+		links, err := discover(response.Body, response.URL, limit)
 		if err != nil {
 			result.err = err
 			return e.finishSource(ctx, source, result)
@@ -340,6 +379,48 @@ func (e *Engine) crawlSource(ctx context.Context, source model.Source, force boo
 		result.err = e.savePost(ctx, post, source, &result)
 	}
 	return e.finishSource(ctx, source, result)
+}
+
+func (e *Engine) crawlJobSource(ctx context.Context, source model.Source) sourceResult {
+	result := sourceResult{warnings: []string{}}
+	if e.Jobs == nil {
+		provider, _ := ingest.JobProviderFor(source.Kind)
+		result.err = &ingest.JobAccessError{Provider: provider.Name, Missing: provider.Credentials}
+		if len(provider.Credentials) == 0 {
+			result.err = errors.New("job API reader is unavailable")
+		}
+		return e.finishSource(ctx, source, result)
+	}
+	posts, err := e.Jobs.Read(ctx, source, e.MaxItems)
+	if err != nil {
+		result.err = err
+		return e.finishSource(ctx, source, result)
+	}
+	for _, post := range posts {
+		if ctx.Err() != nil {
+			result.err = ctx.Err()
+			break
+		}
+		if err := e.savePost(ctx, post, source, &result); err != nil {
+			result.err = err
+			break
+		}
+	}
+	return e.finishSource(ctx, source, result)
+}
+
+func (e *Engine) sourceInterval(source model.Source) time.Duration {
+	interval := e.Interval
+	if interval <= 0 {
+		interval = 30 * time.Minute
+	}
+	if source.IntervalMinutes >= 5 && source.IntervalMinutes <= 1440 {
+		interval = time.Duration(source.IntervalMinutes) * time.Minute
+	}
+	if provider, ok := ingest.JobProviderFor(source.Kind); ok {
+		interval = max(interval, time.Duration(provider.IntervalMinutes)*time.Minute)
+	}
+	return interval
 }
 
 func (e *Engine) crawlXSource(ctx context.Context, source model.Source) sourceResult {
@@ -445,10 +526,7 @@ func (e *Engine) savePost(ctx context.Context, post model.Post, source model.Sou
 func (e *Engine) finishSource(ctx context.Context, source model.Source, result sourceResult) sourceResult {
 	now := time.Now().UTC()
 	source.LastCrawledAt, source.ItemCount = &now, result.seen
-	interval := e.Interval
-	if interval <= 0 {
-		interval = 30 * time.Minute
-	}
+	interval := e.sourceInterval(source)
 	if result.err != nil {
 		source.Failures++
 		source.Status, source.LastError = "error", result.err.Error()
@@ -466,6 +544,10 @@ func (e *Engine) finishSource(ctx context.Context, source model.Source, result s
 	var xError *ingest.XAPIError
 	if errors.As(result.err, &xError) && xError.RetryAt != nil && xError.RetryAt.After(next) {
 		next = xError.RetryAt.Add(time.Second)
+	}
+	var jobError *ingest.JobAccessError
+	if errors.As(result.err, &jobError) && jobError.RetryAt != nil && jobError.RetryAt.After(next) {
+		next = jobError.RetryAt.Add(time.Second)
 	}
 	source.NextCrawlAt = &next
 	if _, err := e.Store.RecordSourceFetch(context.WithoutCancel(ctx), source); err != nil {
@@ -531,7 +613,13 @@ func (e *Engine) Import(ctx context.Context, input ImportInput) (store.UpsertRes
 		return store.UpsertResult{}, errors.New("post text exceeds the 250,000 character limit")
 	}
 	kind := ingest.SourceKind(input.URL)
+	if strings.HasPrefix(kind, "jobs_") || kind == "linkedin_jobs" {
+		return store.UpsertResult{}, errors.New("add job searches and job APIs under Sources; import an individual job URL here")
+	}
 	post := model.Post{URL: ingest.CanonicalURL(input.URL), Body: strings.TrimSpace(input.Text), Title: input.Title, Author: input.Organizer, CaptureMethod: "manual_import"}
+	if kind == "linkedin_job" {
+		post.Job = &model.JobDetails{Provider: "LinkedIn", ProviderURL: "https://www.linkedin.com/jobs"}
+	}
 	if strings.HasPrefix(kind, "x_") {
 		post.Author = ""
 	}
@@ -596,9 +684,9 @@ func (e *Engine) Import(ctx context.Context, input ImportInput) (store.UpsertRes
 	if err != nil {
 		return result, err
 	}
-	if post.CaptureMethod == "public_page" || post.CaptureMethod == "x_api" {
+	if post.CaptureMethod == "public_page" || post.CaptureMethod == "public_job" || post.CaptureMethod == "x_api" {
 		source.LastCrawledAt, source.Status, source.LastError, source.Failures, source.ItemCount = &now, "ok", "", 0, 1
-		next := now.Add(max(e.Interval, 30*time.Minute))
+		next := now.Add(e.sourceInterval(source))
 		source.NextCrawlAt = &next
 		_, err = e.Store.RecordSourceFetch(ctx, source)
 	}
@@ -615,6 +703,22 @@ func ValidateSource(source model.Source) error {
 	}
 	if len(strings.TrimSpace(source.Name)) == 0 || len(source.Name) > 120 {
 		return errors.New("source name must be between 1 and 120 characters")
+	}
+	if source.IntervalMinutes != 0 && (source.IntervalMinutes < 5 || source.IntervalMinutes > 1440) {
+		return errors.New("source refresh interval must be between 5 and 1440 minutes")
+	}
+	detected := ingest.SourceKind(source.URL)
+	if strings.HasPrefix(source.Kind, "jobs_") {
+		return ingest.ValidateJobSource(source)
+	}
+	if strings.HasPrefix(detected, "jobs_") {
+		return errors.New("select the matching job API source type; API credentials belong in server environment variables")
+	}
+	if source.Kind == "linkedin_job" && ingest.LinkedInJobID(source.URL) == "" {
+		return errors.New("use an individual LinkedIn job URL")
+	}
+	if source.Kind == "linkedin_jobs" && !ingest.IsLinkedInJobSearch(source.URL) {
+		return errors.New("use a public LinkedIn job search or company jobs URL")
 	}
 	if strings.HasPrefix(source.Kind, "x_") {
 		if !ingest.IsX(u.Hostname()) {

@@ -144,7 +144,7 @@ func (s *Store) Get(ctx context.Context, id string) (model.Opportunity, error) {
 }
 
 func (s *Store) GetByURL(ctx context.Context, url string) (model.Opportunity, error) {
-	return s.get(ctx, `SELECT data FROM opportunities WHERE url = ?1 OR (json_extract(data,'$.source_kind') IN ('linkedin_post','web_page') AND json_extract(data,'$.source_url') = ?1) LIMIT 1`, url)
+	return s.get(ctx, `SELECT data FROM opportunities WHERE url = ?1 OR (json_extract(data,'$.source_kind') IN ('linkedin_post','linkedin_job','web_page') AND json_extract(data,'$.source_url') = ?1) LIMIT 1`, url)
 }
 
 func (s *Store) get(ctx context.Context, query string, arg string) (model.Opportunity, error) {
@@ -236,7 +236,7 @@ func queryWhere(q model.Query, now time.Time) (string, []any) {
 		args = append(args, q.Source)
 	}
 	if q.Platform != "" {
-		kinds := map[string][]string{"x": {"x_search", "x_profile", "x_post", "x_archive"}, "linkedin": {"linkedin_post", "linkedin_page"}, "rss": {"rss"}, "web": {"web_page"}}[q.Platform]
+		kinds := map[string][]string{"x": {"x_search", "x_profile", "x_post", "x_archive"}, "linkedin": {"linkedin_post", "linkedin_page", "linkedin_job", "linkedin_jobs"}, "rss": {"rss", "rss_jobs"}, "web": {"web_page"}, "jobs": {"jobs_arbeitnow", "jobs_adzuna", "jobs_usajobs", "jobs_reed", "jobs_jooble"}}[q.Platform]
 		if len(kinds) == 0 {
 			clauses = append(clauses, "1 = 0")
 		} else {
@@ -304,6 +304,7 @@ func changedFields(a, b model.Opportunity) []string {
 		{"Title updated", a.Title, b.Title}, {"Program details updated", a.Body, b.Body},
 		{"Organizer updated", a.Organizer, b.Organizer}, {"Opportunity type updated", a.Kind, b.Kind},
 		{"Publisher updated", a.PostAuthor, b.PostAuthor},
+		{"Job details updated", a.Job, b.Job},
 		{"Discovery region updated", a.Region, b.Region}, {"Funding updated", a.Funding, b.Funding},
 		{"Topics updated", a.Tags, b.Tags},
 		{"Deadline updated", a.Deadline + a.DeadlineState, b.Deadline + b.DeadlineState},

@@ -4,8 +4,9 @@ Radwave is a Go application with an embedded HTML/CSS/JavaScript dashboard. Stan
 
 ```text
 RSS / Atom ──────┐
-LinkedIn posts ──┼─> HTTP fetcher ─> source parser ─┐
+LinkedIn posts/jobs ┼─> HTTP fetcher ─> source parser ─┐
 Public pages ────┘                                 │
+Job provider APIs ─> fixed-host JSON adapter ────────┤
 X search / profiles / posts ─> X API adapter ───────┼─> shared extraction
 Pasted text / legacy X archive ────────────────────┘          │
                                                              v
@@ -21,6 +22,8 @@ Pasted text / legacy X archive ────────────────�
 - `internal/model`: opportunity, source, observation, and crawl-run records.
 - `internal/ingest`: URL normalization, safe HTTP fetching, JSON-LD/HTML and RSS/Atom parsing, and evidence-backed extraction.
 - `internal/ingest/x.go`: fixed-host X API access, watchlist/profile pagination, long-post text, expanded links, and public engagement counters.
+- `internal/ingest/jobs.go`: job-provider requests/authentication and normalization into the shared `model.Post` schema.
+- `internal/ingest/job_page.go`: public `JobPosting` JSON-LD, LinkedIn job descriptions, and listing discovery.
 - `internal/legacy`: imports the original Twitter scraper's opportunity records into Radwave's schema.
 - `internal/crawler`: source coordination, conditional feed requests, bounded discovery, and refresh/backoff logic.
 - `internal/store`: SQLite/PostgreSQL persistence, filtering, deduplication, and update histories.
@@ -33,6 +36,8 @@ Pasted text / legacy X archive ────────────────�
 ## Source pipeline
 
 Twitter/X is an additional adapter in this pipeline. Search watchlists and profile timelines keep pagination/high-water checkpoints in source state; individual posts and batched captured posts refresh metrics. X API rate limits and access failures produce persisted status/backoff rather than blocking sleeps. The frontend filters a single opportunity store by platform, and all sources share the same crawl lease, extraction rules, histories, and exports.
+
+Job APIs implement `JobReader` and return the same post records as HTML/RSS adapters. `rss_jobs` adds explicit job-board context rather than relying on scholarship-style keywords. Lightweight API sources are prioritized ahead of article expansion, and source-specific cadences are bounded by provider minimums. Credentials remain server-side; stored URLs contain only public filters. XML feed parsing supports declared legacy encodings used by university career systems.
 
 1. Sources are selected from enabled records that are due for a refresh. A manual refresh can bypass the due time.
 2. Up to two sources run concurrently. Requests to the same host are separated by two seconds by default.
@@ -65,7 +70,7 @@ Access failures back off exponentially, capped at 24 hours. Blocked responses us
 
 ## Deployment model
 
-Standalone instances own a local scheduler. Vercel instances run refreshes inside authenticated HTTP requests, triggered every 30 minutes by GitHub Actions. A shared crawl lease with renewal coordinates instances; its expiry allows recovery after an interrupted invocation. Browser shortlists live in local storage, scoped to the dashboard's origin; the management token is held only in the browser tab's session storage.
+Standalone instances own a local scheduler that checks for due work at least every five minutes when enabled. Vercel instances run refreshes inside authenticated HTTP requests, triggered every five minutes by GitHub Actions, subject to scheduled-dispatch delays. Each source's cadence and backoff determine when it is actually fetched. A shared crawl lease with renewal coordinates instances; its expiry allows recovery after an interrupted invocation. Browser shortlists live in local storage, scoped to the dashboard's origin; the management token is held only in the browser tab's session storage.
 
 The PostgreSQL adapter namespaces tables in `opportunity_radar`, translates parameter bindings and JSON lookups, and uses row locks for updates. Transaction-level advisory locking serializes schema migration across cold starts. This works with Neon's transaction pooler; no connection-local search path is required. Secure WebSockets carry PostgreSQL traffic over HTTPS, including on networks where direct PostgreSQL ports are unavailable.
 

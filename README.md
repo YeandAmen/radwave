@@ -22,4 +22,6 @@ The globe uses self-hosted MapLibre GL JS and public-domain Natural Earth countr
 
 The [original Twitter scraper](https://github.com/YeandAmen/twitter-scrapper) now feeds Radwave's shared opportunity pipeline alongside LinkedIn, RSS, and publisher articles. Search watchlists, profiles, posts, engagement histories, and channel filters live in one workspace. Automatic X discovery requires X API access and credits; pasted announcements can be imported now.
 
-[Setup & usage guide](docs/guide.md) · [Architecture](docs/architecture.md)
+Jobs also arrive through structured APIs and verified university/NGO feeds, with newest-first discovery and source-specific refresh cadences.
+
+[Setup & usage guide](docs/guide.md) · [Job sources](docs/job-sources.md) · [Architecture](docs/architecture.md)

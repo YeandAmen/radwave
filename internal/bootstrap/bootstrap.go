@@ -55,6 +55,9 @@ func Seed(ctx context.Context, s *store.Store) error {
 			reference = added
 		}
 	}
+	if err := SeedJobs(ctx, s); err != nil {
+		return err
+	}
 	if _, err := s.Get(ctx, "linkedin-7520960460347768832"); err == nil {
 		return nil
 	} else if !errors.Is(err, store.ErrNotFound) {

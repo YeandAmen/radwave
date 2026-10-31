@@ -29,11 +29,13 @@ go run ./cmd/radar serve
 
 Open **http://127.0.0.1:8080**.
 
-On a new database, Radwave installs three starter sources and begins a public-source refresh:
+On a new database, Radwave installs its foundational opportunity sources and begins a public-source refresh:
 
 1. The supplied **Nkabom Collaborative – UESD** business-incubation post on LinkedIn.
 2. **Opportunity Desk**, a global opportunity feed.
 3. **Opportunities for Africans**, which includes international programs relevant to African applicants.
+
+It also installs the [verified job and funding source catalog](job-sources.md): Arbeitnow's keyless APIs, public LinkedIn jobs, university/NGO career feeds, and fundsforNGOs funding calls.
 
 The Nkabom example initially appears as a **reference snapshot captured on 30 October 2026**. A successful live refresh replaces it with current public-page data. Its stated deadline is **3 November 2026**, and its stated age range is **18–35**. Its location and country restrictions are left unconfirmed because they are not stated in the post.
 
@@ -52,7 +54,7 @@ No Node.js installation, database server, LLM key, or LinkedIn login is needed t
 
 ### Add an opportunity
 
-Click **Add a link** and enter an individual LinkedIn post, X / Twitter post, or opportunity-article URL. Radwave fetches the readable announcement and extracts its fields; fetching X posts requires configured API access.
+Click **Add a link** and enter an individual LinkedIn post or job, X / Twitter post, or opportunity-article URL. Radwave fetches the readable announcement and extracts its fields; fetching X posts requires configured API access.
 
 If the page is unavailable, expand **Have the post text?** and paste the announcement. The result is marked **Text import**. Include the eligibility, application link, and complete deadline in the pasted text for the clearest result.
 
@@ -66,6 +68,9 @@ Open **Sources → Add source**. Give it a name and a URL, and choose or automat
 | Public LinkedIn company/profile page | Discover the individual post links visible on the returned public page. |
 | Individual LinkedIn post             | Refresh the announcement and publicly exposed engagement counts.        |
 | Opportunity article                  | Refresh one publisher announcement.                                     |
+| Individual LinkedIn job / job search | Read public job descriptions and discover exposed listing links.        |
+| Job-board RSS / Atom feed            | Discover job roles and expand their publisher pages.                    |
+| Structured job API                   | Read normalized JSON listings from the selected provider.               |
 | X / Twitter search watchlist         | Discover recent matching posts through the X API.                       |
 | X / Twitter profile timeline         | Discover posts from one account through the X API.                      |
 | Individual X / Twitter post          | Refresh its announcement and available engagement counts.               |
@@ -91,7 +96,11 @@ go run ./cmd/radar import-twitter -from /path/to/twitter-scrapper/data/opportuni
 
 This imports public opportunity records as a labeled X archive, preserving recorded capture times without treating them as publication dates. Older archive captures cannot replace newer live records. Legacy account/API-key and email-delivery tables are excluded from this import.
 
-The default schedule is every **30 minutes**, with **20 feed entries/page links per source**, **two concurrent sources**, and at least **two seconds between requests to the same host**. Failed access uses backoff; the source panel shows the next check time. **Refresh sources** explicitly retries enabled sources.
+The default source cadence is **30 minutes**, with **20 feed entries/API results per source**, **two concurrent sources**, and at least **two seconds between requests to the same host**. Job sources have 10–15-minute defaults where supported; public job searches and job RSS expand up to 10 listings. Hosted scheduling checks for due sources every five minutes. Failed access uses backoff; the source panel shows the next check time. **Refresh sources** explicitly retries enabled sources.
+
+### Job discovery
+
+The **Jobs** filter starts newest-first and includes job APIs, LinkedIn listings, and career feeds. Job cards show source-provided salary, employment type, employer, and publication/capture time where available. Open **Sources → Add a job source** to connect a provider or select a verified feed. See [Job sources](job-sources.md) for credentials, coverage, and provider access requirements.
 
 ### Shortlist and share
 
@@ -149,9 +158,9 @@ Environment values are read from the process environment. [`.env.example`](../.e
 
 The live deployment runs the Go HTTP server on Vercel with a dedicated Neon PostgreSQL database. Its data, source state, and observation histories persist across function instances and redeployments.
 
-`cmd/server/main.go` is the Vercel entrypoint. It uses `PORT`, `DATABASE_URL`, `RADAR_ADMIN_TOKEN`, `CRON_SECRET`, and optional `X_BEARER_TOKEN`. Hosted refreshes complete inside the request, and a shared database lease prevents overlapping crawls across instances. Neon connections use its secure WebSocket PostgreSQL transport.
+`cmd/server/main.go` is the Vercel entrypoint. It uses `PORT`, `DATABASE_URL`, `RADAR_ADMIN_TOKEN`, `CRON_SECRET`, optional `X_BEARER_TOKEN`, and any configured [job API credentials](job-sources.md). Hosted refreshes complete inside the request, and a shared database lease prevents overlapping crawls across instances. Neon connections use its secure WebSocket PostgreSQL transport.
 
-The **Refresh hosted opportunities** GitHub workflow invokes the protected `/api/cron` endpoint every 30 minutes. This provides regular updates on Vercel Hobby without depending on a process-local timer. Configure the repository variable `RADAR_PRODUCTION_URL` and secret `RADAR_CRON_SECRET`; the latter must match Vercel's `CRON_SECRET`.
+The hosted refresh GitHub workflow invokes the protected `/api/cron` endpoint every five minutes and fetches only sources whose individual cadence is due. Scheduled dispatch is best-effort. This provides regular updates on Vercel Hobby without depending on a process-local timer. Configure the repository variable `RADAR_PRODUCTION_URL` and secret `RADAR_CRON_SECRET`; the latter must match Vercel's `CRON_SECRET`.
 
 To migrate an existing SQLite radar into a fresh hosted database:
 
@@ -199,7 +208,7 @@ Compose binds the host port to localhost and persists SQLite in the `radar-data`
 | GET    | `/feed.xml`               | Recent non-closed opportunities as RSS.                  |
 | GET    | `/healthz`                | Database-backed health response.                         |
 
-Opportunity queries accept `q`, `kind` (comma-separated types), `platform` (`linkedin`, `x`, `rss`, or `web`), `region`, `status`, `source`, `sort`, `limit`, `offset`, and `ids` (up to 200 shortlist IDs). Omit `platform` for the combined feed. The list limit is at most 200; exports include at most 10,000 matching records and JSON reports the number exported.
+Opportunity queries accept `q`, `kind` (comma-separated types), `platform` (`linkedin`, `jobs`, `x`, `rss`, or `web`), `region`, `status`, `source`, `sort`, `limit`, `offset`, and `ids` (up to 200 shortlist IDs). Omit `platform` for the combined feed. The list limit is at most 200; exports include at most 10,000 matching records and JSON reports the number exported.
 
 `POST /api/crawl` runs inside the request on Vercel and starts a background refresh in standalone deployments.
 

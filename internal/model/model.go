@@ -12,7 +12,16 @@ import (
 
 var Kinds = []string{"program", "scholarship", "fellowship", "grant", "internship", "competition", "job", "bounty", "freelance", "research", "training", "conference", "volunteering"}
 var Regions = []string{"Worldwide", "Africa", "Americas", "Asia", "Europe", "Oceania", "Not stated"}
-var SourceKinds = []string{"linkedin_post", "linkedin_page", "rss", "web_page", "x_search", "x_profile", "x_post", "x_archive"}
+var SourceKinds = []string{"linkedin_post", "linkedin_page", "linkedin_job", "linkedin_jobs", "rss", "rss_jobs", "web_page", "jobs_arbeitnow", "jobs_adzuna", "jobs_usajobs", "jobs_reed", "jobs_jooble", "x_search", "x_profile", "x_post", "x_archive"}
+
+type JobDetails struct {
+	Provider       string `json:"provider,omitempty"`
+	ProviderURL    string `json:"provider_url,omitempty"`
+	Salary         string `json:"salary,omitempty"`
+	EmploymentType string `json:"employment_type,omitempty"`
+	DeadlineLabel  string `json:"deadline_label,omitempty"`
+	Remote         *bool  `json:"remote,omitempty"`
+}
 
 type Opportunity struct {
 	ID                string            `json:"id"`
@@ -21,6 +30,7 @@ type Opportunity struct {
 	Kind              string            `json:"kind"`
 	Organizer         string            `json:"organizer"`
 	PostAuthor        string            `json:"post_author,omitempty"`
+	Job               *JobDetails       `json:"job,omitempty"`
 	Summary           string            `json:"summary"`
 	Body              string            `json:"body"`
 	ApplicationURL    string            `json:"application_url"`
@@ -80,24 +90,25 @@ func (o *Opportunity) Decorate(now time.Time) {
 }
 
 type Source struct {
-	ID             string     `json:"id"`
-	Name           string     `json:"name"`
-	URL            string     `json:"url"`
-	Kind           string     `json:"kind"`
-	Enabled        bool       `json:"enabled"`
-	Status         string     `json:"status"`
-	LastError      string     `json:"last_error"`
-	LastCrawledAt  *time.Time `json:"last_crawled_at"`
-	NextCrawlAt    *time.Time `json:"next_crawl_at"`
-	CreatedAt      time.Time  `json:"created_at"`
-	Failures       int        `json:"failures"`
-	ItemCount      int        `json:"item_count"`
-	ETag           string     `json:"-"`
-	LastModified   string     `json:"-"`
-	SinceID        string     `json:"-"`
-	NextToken      string     `json:"-"`
-	PendingSinceID string     `json:"-"`
-	XUserID        string     `json:"-"`
+	ID              string     `json:"id"`
+	Name            string     `json:"name"`
+	URL             string     `json:"url"`
+	Kind            string     `json:"kind"`
+	Enabled         bool       `json:"enabled"`
+	Status          string     `json:"status"`
+	LastError       string     `json:"last_error"`
+	LastCrawledAt   *time.Time `json:"last_crawled_at"`
+	NextCrawlAt     *time.Time `json:"next_crawl_at"`
+	CreatedAt       time.Time  `json:"created_at"`
+	Failures        int        `json:"failures"`
+	ItemCount       int        `json:"item_count"`
+	IntervalMinutes int        `json:"interval_minutes,omitempty"`
+	ETag            string     `json:"-"`
+	LastModified    string     `json:"-"`
+	SinceID         string     `json:"-"`
+	NextToken       string     `json:"-"`
+	PendingSinceID  string     `json:"-"`
+	XUserID         string     `json:"-"`
 }
 
 type Observation struct {
@@ -159,28 +170,36 @@ type Link struct {
 }
 
 type Post struct {
-	URL           string
-	Title         string
-	Body          string
-	Author        string
-	Categories    []string
-	Links         []Link
-	PublishedAt   *time.Time
-	Reactions     *int64
-	Comments      *int64
-	Reposts       *int64
-	Quotes        *int64
-	CaptureMethod string
+	Identity       string
+	URL            string
+	Title          string
+	Body           string
+	Author         string
+	Categories     []string
+	Links          []Link
+	PublishedAt    *time.Time
+	Reactions      *int64
+	Comments       *int64
+	Reposts        *int64
+	Quotes         *int64
+	CaptureMethod  string
+	Job            *JobDetails
+	Location       string
+	Deadline       string
+	ApplicationURL string
 }
 
 func Platform(sourceKind string) string {
+	if strings.HasPrefix(sourceKind, "jobs_") {
+		return "jobs"
+	}
 	if strings.HasPrefix(sourceKind, "x_") {
 		return "x"
 	}
 	if strings.HasPrefix(sourceKind, "linkedin_") {
 		return "linkedin"
 	}
-	if sourceKind == "rss" {
+	if sourceKind == "rss" || sourceKind == "rss_jobs" {
 		return "rss"
 	}
 	return "web"

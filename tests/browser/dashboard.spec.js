@@ -10,6 +10,11 @@ const deadline = (days) => {
 };
 const fixtures = [
   {
+    url: "https://gh.linkedin.com/jobs/view/research-engineer-at-radwave-4484260323",
+    organizer: "Radwave Research",
+    text: `Research Engineer\nBuild reliable research systems with a global team.\nLocation: Accra, Ghana\nSalary: GHS 8000–12000 per month\nEmployment type: Full-time\nQualifications\nExperience with Go and production systems is required.\nApply now: https://apply.example.org/research-engineer\nApplication deadline: ${deadline(30)}`,
+  },
+  {
     url: "https://twitter.com/radwave_test/status/1234567890123456789",
     organizer: "Radwave Security",
     text: `CALL FOR APPLICATIONS: Open Source Security Bounty\nBug bounty applications are open for security researchers.\nApply now: https://apply.example.org/security-bounty\nApplication deadline: ${deadline(18)}`,
@@ -338,4 +343,63 @@ test("X announcements share Radwave's filters and source management", async ({
     "false",
   );
   await expect(page.locator("#x-connection")).toContainText("One Radwave");
+});
+
+test("job discovery shows salary and newest-first roles, and prepares keyed APIs", async ({
+  page,
+  isMobile,
+}, testInfo) => {
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Find opportunities", exact: true })
+    .click();
+  await page.locator('.category-tab[data-tab="job"]').click();
+  await expect(page.locator(".opportunity-card")).toHaveCount(1);
+  await expect(page.locator("#sort")).toHaveValue("newest");
+  await expect(page.locator(".opportunity-card")).toContainText(
+    "GHS 8000–12000 per month",
+  );
+  await page
+    .getByRole("button", { name: "Research Engineer", exact: true })
+    .click();
+  await expect(page.locator(".job-details")).toContainText("Full-time");
+  await expect(page.locator("#detail-dialog")).toContainText(
+    "Salary / compensation",
+  );
+  await page.getByRole("button", { name: "Close opportunity details" }).click();
+  await goTo(page, "Sources & updates", isMobile);
+  await page
+    .getByRole("button", { name: "Add a job source", exact: true })
+    .click();
+  await unlock(page);
+  await page.locator(".verified-source-presets summary").click();
+  await page
+    .locator("#public-source-presets")
+    .getByRole("button", { name: "University of Bath · Careers", exact: true })
+    .click();
+  await expect(page.locator("#source-kind")).toHaveValue("rss_jobs");
+  await expect(page.locator("#source-interval")).toHaveValue("10");
+  await page
+    .getByLabel("Source type", { exact: true })
+    .selectOption("jobs_usajobs");
+  const name = `Federal jobs ${testInfo.project.name}`;
+  await page.getByLabel("Source name", { exact: true }).fill(name);
+  await page
+    .getByLabel("Job search keywords", { exact: false })
+    .fill(`software ${testInfo.project.name}`);
+  await expect(page.locator("#source-enabled")).not.toBeChecked();
+  await expect(page.locator("#source-interval")).toHaveValue("10");
+  await expect(page.locator("#job-provider-note")).toContainText(
+    "USAJOBS_API_KEY",
+  );
+  await page.getByRole("button", { name: "Add to Radwave" }).click();
+  const row = page
+    .locator(".source-row")
+    .filter({ has: page.getByRole("heading", { name, exact: true }) });
+  await expect(row.getByRole("switch")).toHaveAttribute(
+    "aria-checked",
+    "false",
+  );
+  await expect(row).toContainText("Cadence: 10 min");
+  await expect(row).toContainText("API setup:");
 });

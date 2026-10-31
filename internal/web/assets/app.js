@@ -62,6 +62,14 @@ const sourceLabels = {
   linkedin_page: "Public LinkedIn page",
   rss: "RSS / Atom feed",
   web_page: "Opportunity article",
+  linkedin_job: "LinkedIn job listing",
+  linkedin_jobs: "Public LinkedIn job search",
+  rss_jobs: "Job-board RSS / Atom feed",
+  jobs_arbeitnow: "Arbeitnow job API",
+  jobs_usajobs: "USAJobs job API",
+  jobs_reed: "Reed job API",
+  jobs_jooble: "Jooble job API",
+  jobs_adzuna: "Adzuna job API",
   x_search: "X / Twitter search",
   x_profile: "X / Twitter profile",
   x_post: "X / Twitter post",
@@ -74,6 +82,9 @@ const captures = {
   reference_import: "Reference snapshot",
   x_api: "X API capture",
   x_archive: "Imported X archive",
+  public_job: "Public job listing",
+  job_api: "Job API capture",
+  job_api_summary: "Job API summary",
 };
 
 function readStorage(storage, key, fallback) {
@@ -197,6 +208,8 @@ function kindPill(o) {
 function sourceMark(kind) {
   if (kind.startsWith("x_"))
     return '<span class="source-mark x-mark" aria-label="X / Twitter">𝕏</span>';
+  if (kind.startsWith("jobs_"))
+    return `<span class="source-mark feed" aria-label="Job API">${icon("briefcase")}</span>`;
   return kind.startsWith("linkedin")
     ? '<span class="source-mark linkedin" aria-label="LinkedIn">in</span>'
     : `<span class="source-mark feed">${icon("rss")}</span>`;
@@ -361,6 +374,7 @@ function renderTypes() {
     .join("");
   $("#category-tabs").innerHTML = [
     "",
+    "job",
     "program",
     "fellowship",
     "scholarship",
@@ -397,6 +411,7 @@ function renderChannels() {
   $("#channel-tabs").innerHTML = [
     ["", "All signals"],
     ["linkedin", "LinkedIn"],
+    ["jobs", "Job APIs"],
     ["x", "X / Twitter"],
     ["rss", "Feeds"],
     ["web", "Articles"],
@@ -457,9 +472,13 @@ function updateFilters() {
   if (state.platform)
     chips.push([
       "platform",
-      { x: "X / Twitter", linkedin: "LinkedIn", rss: "Feeds", web: "Articles" }[
-        state.platform
-      ],
+      {
+        x: "X / Twitter",
+        linkedin: "LinkedIn",
+        jobs: "Job APIs",
+        rss: "Feeds",
+        web: "Articles",
+      }[state.platform],
     ]);
   const target = $("#active-filters");
   target.hidden = chips.length === 0;
@@ -518,11 +537,24 @@ function card(o) {
   );
   const url = safeURL(o.application_url);
   const engagement = o.reactions !== null || o.comments !== null;
+  const providerURL = safeURL(o.job?.provider_url);
+  const provider =
+    o.job?.provider && providerURL
+      ? `<a class="job-attribution" href="${esc(providerURL)}" target="_blank" rel="noopener noreferrer">${esc(o.job.provider)}</a>`
+      : `<span>${esc(o.source_name)}</span>`;
+  const support = o.job?.salary
+    ? `<div class="card-fact">${icon("briefcase")}<span>${esc(o.job.salary)}</span></div>`
+    : o.funding
+      ? `<div class="card-fact">${icon("gift")}<span>${esc(o.funding)}</span></div>`
+      : age
+        ? `<div class="card-fact">${icon("users")}<span title="${esc(age)}">${esc(age)}</span></div>`
+        : "";
   return `<article class="opportunity-card${o.status === "closed" ? " closed" : ""}" data-id="${esc(o.id)}">
     <div class="card-top">${kindPill(o)}<button class="save-button${saved ? " saved" : ""}" data-save="${esc(o.id)}" aria-label="${saved ? "Unsave" : "Save"} ${esc(o.title)}" aria-pressed="${saved}">${icon("bookmark")}</button></div>
-    <div class="card-source">${sourceMark(o.source_kind)}<span>${esc(o.source_name)}</span></div>
+    <div class="card-source">${sourceMark(o.source_kind)}${provider}</div>
     <div class="card-content"><h3 class="card-title"><button data-open="${esc(o.id)}">${esc(o.title)}</button></h3>${o.organizer ? `<div class="card-organizer">${esc(o.organizer)}</div>` : ""}<p class="card-summary">${esc(o.summary)}</p></div>
-    <div class="card-facts"><div class="card-fact">${icon("pin")}<span class="${o.location ? "" : "unknown"}" title="${esc(o.location || "Program location is not stated in the captured source")}">${esc(o.location || "Location not stated")}</span></div><div class="card-fact">${icon("calendar")}<span class="deadline-info">${esc(deadlineLabel(o))}${statusPill(o)}</span></div>${o.funding ? `<div class="card-fact">${icon("gift")}<span>${esc(o.funding)}</span></div>` : age ? `<div class="card-fact">${icon("users")}<span title="${esc(age)}">${esc(age)}</span></div>` : ""}</div>
+    <div class="card-facts"><div class="card-fact">${icon("pin")}<span class="${o.location ? "" : "unknown"}" title="${esc(o.location || "Location is not stated in the captured source")}">${esc(o.location || "Location not stated")}</span></div><div class="card-fact">${icon("calendar")}<span class="deadline-info" title="${esc(o.job?.deadline_label || "Application deadline")}">${esc(deadlineLabel(o))}${statusPill(o)}</span></div>${support}</div>
+    ${o.job ? `<div class="job-posted">${icon("clock")}${o.published_at ? `Posted ${esc(ago(o.published_at))}` : `First captured ${esc(ago(o.first_seen_at))}`}${o.job.remote === true ? " · Remote" : ""}${o.job.employment_type ? ` · ${esc(o.job.employment_type.replaceAll("_", " "))}` : ""}</div>` : ""}
     <div class="card-tags">${(o.tags || [])
       .slice(0, 3)
       .map((tag) => `<span class="tag">${esc(tag)}</span>`)
@@ -536,7 +568,9 @@ function renderCards() {
   $("#result-count").textContent = state.total;
   if (state.items.length) grid.innerHTML = state.items.map(card).join("");
   else {
-    const filtered = Boolean(state.search || state.kind || state.region);
+    const filtered = Boolean(
+      state.search || state.kind || state.region || state.platform,
+    );
     let heading = "A fresh space for your next chapter.",
       text =
         "Add an announcement or a trusted source to start discovering opportunities.",
@@ -600,6 +634,10 @@ function renderCards() {
 function navigate(page, kind = "") {
   state.page = page;
   state.kind = kind;
+  if (kind === "job") {
+    state.sort = "newest";
+    $("#sort").value = "newest";
+  }
   state.search = "";
   state.region = "";
   state.platform = "";
@@ -784,10 +822,13 @@ function renderDetail(o, history) {
         `<dt>${esc(key.replaceAll("_", " "))}</dt><dd>${esc(value)}</dd>`,
     )
     .join("");
+  const jobDetails = o.job
+    ? `<section class="detail-section job-details"><h3>${icon("briefcase")}Job details</h3><p>${o.job.employment_type ? `${esc(o.job.employment_type.replaceAll("_", " "))} · ` : ""}${o.job.remote === true ? "Remote" : o.job.remote === false ? "Remote not indicated by source" : "Remote arrangement not stated"}</p><p>${o.published_at ? `Published by the source: ${formatTime(o.published_at)}.` : "Publication time was not supplied."} First captured: ${formatTime(o.first_seen_at)}.</p>${o.capture_method === "job_api_summary" ? "<p>The API supplied a summary. Open the original job listing for the full description and requirements.</p>" : ""}</section>`
+    : "";
   $("#detail-content").innerHTML =
     `<div class="detail-topbar"><span>A clearer look at your next step</span><div><button class="icon-button" data-action="share" aria-label="Copy opportunity link" title="Copy link">${icon("copy")}</button><button class="icon-button" data-close="detail-dialog" aria-label="Close opportunity details">${icon("x")}</button></div></div>
     <div class="detail-body"><div class="detail-badges">${kindPill(o)}${statusPill(o)}</div><h2 id="detail-title">${esc(o.title)}</h2><p class="detail-organizer">${esc(o.organizer || `Published by ${o.source_name}`)}</p><p class="detail-summary">${esc(o.summary)}</p><div class="detail-tags">${(o.tags || []).map((tag) => `<span class="tag">${esc(tag)}</span>`).join("")}</div>
-    <div class="detail-facts"><div class="detail-fact">${icon("calendar")}<div><small>Application deadline</small><strong>${esc(deadlineLabel(o))}</strong></div></div><div class="detail-fact">${icon("pin")}<div><small>Program location</small><strong>${esc(o.location || "Not stated in source")}</strong></div></div><div class="detail-fact">${icon("globe")}<div><small>Discovery region · confirm eligibility</small><strong>${esc(o.region)}</strong></div></div><div class="detail-fact">${icon("gift")}<div><small>Funding / support</small><strong>${esc(o.funding || "See the original announcement")}</strong></div></div></div>
+    <div class="detail-facts"><div class="detail-fact">${icon("calendar")}<div><small>${esc(o.job?.deadline_label || "Application deadline")}</small><strong>${esc(deadlineLabel(o))}</strong></div></div><div class="detail-fact">${icon("pin")}<div><small>${o.job ? "Job location" : "Program location"}</small><strong>${esc(o.location || "Not stated in source")}</strong></div></div><div class="detail-fact">${icon("globe")}<div><small>Discovery region · confirm eligibility</small><strong>${esc(o.region)}</strong></div></div><div class="detail-fact">${icon(o.job ? "briefcase" : "gift")}<div><small>${o.job ? "Salary / compensation" : "Funding / support"}</small><strong>${esc(o.job ? o.job.salary || "Not stated in source" : o.funding || "See the original announcement")}</strong></div></div></div>${jobDetails}
     <section class="detail-section"><h3>${icon("users")}Who can apply?</h3>${o.eligibility?.length ? `<ul>${o.eligibility.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : "<p>Eligibility requirements weren’t available in the captured text. Check the original announcement for the full criteria.</p>"}</section>
     ${o.benefits?.length ? `<section class="detail-section"><h3>${icon("sprout")}What’s on offer</h3><ul>${o.benefits.map((item) => `<li>${esc(item)}</li>`).join("")}</ul></section>` : ""}${missing}
     <div class="detail-source-box">${original ? `<a class="source-link" href="${esc(original)}" target="_blank" rel="noopener noreferrer"><span>Read the original · ${esc(o.source_name)}</span>${icon("arrow-up-right")}</a>` : `<strong>${esc(o.source_name)}</strong>`}<p>${o.capture_method === "reference_import" ? `Reference example captured on ${formatDate(o.last_fetched_at)}. A successful public-page refresh replaces this snapshot.` : `${esc(captures[o.capture_method] || "Source capture")} · ${formatTime(o.last_fetched_at)}.`}${source?.status === "blocked" || source?.status === "error" ? " The latest attempt to refresh this source was unsuccessful." : ""} Reaction counts are totals observed at capture time.</p><span class="capture-badge">${esc(captures[o.capture_method] || "Source capture")} · ${esc(o.extraction_version)}</span></div>
@@ -885,6 +926,23 @@ function renderSources(runs = null) {
     if (source?.kind === "x_archive") {
       $$("button", element).forEach((button) => (button.disabled = true));
     }
+    if (source?.kind.startsWith("jobs_")) {
+      $(".source-main>.stat-icon", element).innerHTML = icon("briefcase");
+      const provider = state.meta?.job_providers?.find(
+        (item) => item.kind === source.kind,
+      );
+      if (provider && !provider.configured) {
+        const setup = document.createElement("p");
+        setup.className = "job-provider-status";
+        setup.textContent = `API setup: ${provider.credentials.join(" + ")} in the server environment.`;
+        element.append(setup);
+      }
+    }
+    if (source?.interval_minutes) {
+      const cadence = document.createElement("span");
+      cadence.textContent = `Cadence: ${source.interval_minutes} min`;
+      $(".source-meta", element).append(cadence);
+    }
   });
   if (runs !== null)
     $("#run-list").innerHTML = runs.length
@@ -937,9 +995,95 @@ function openSource() {
   requireManagement(() => {
     $("#source-form").reset();
     updateXSourceFields();
+    updateJobSourceFields();
     $("#source-error").hidden = true;
     showDialog("source-dialog");
   });
+}
+
+function updateJobSourceFields() {
+  $("#public-source-presets").innerHTML = (state.meta?.source_presets || [])
+    .map(
+      (source, index) =>
+        `<button type="button" data-source-preset="${index}">${esc(source.name)}</button>`,
+    )
+    .join("");
+  const kind = $("#source-kind").value;
+  const provider = state.meta?.job_providers?.find(
+    (item) => item.kind === kind,
+  );
+  $("#job-source-fields").hidden = !provider;
+  $("#job-search-fields").hidden = !provider || kind === "jobs_arbeitnow";
+  $("#job-country-field").hidden = kind !== "jobs_adzuna";
+  $("#source-url").readOnly = !!provider && kind !== "jobs_arbeitnow";
+  if (!provider) return;
+  $("#job-presets").innerHTML = state.meta.job_providers
+    .map(
+      (item) =>
+        `<button type="button" data-job-provider="${esc(item.kind)}" class="${kind === item.kind ? "active" : ""}">${esc(item.name)}</button>`,
+    )
+    .join("");
+  $("#job-provider-note").textContent =
+    `${provider.note} ${provider.configured ? "API reader configured." : `Set ${provider.credentials.join(" + ")} in the server environment; this source can be prepared paused.`}`;
+  syncJobSourceURL();
+}
+
+function syncJobSourceURL() {
+  const kind = $("#source-kind").value;
+  const provider = state.meta?.job_providers?.find(
+    (item) => item.kind === kind,
+  );
+  if (!provider) return;
+  if (kind === "jobs_arbeitnow") {
+    if (!$("#source-url").value.includes("arbeitnow"))
+      $("#source-url").value = provider.url;
+    return;
+  }
+  const url = new URL(provider.url);
+  const names = {
+    jobs_usajobs: ["Keyword", "LocationName"],
+    jobs_reed: ["keywords", "locationName"],
+    jobs_jooble: ["keywords", "location"],
+    jobs_adzuna: ["what", "where"],
+  }[kind];
+  url.search = "";
+  const keywords = $("#job-keywords").value.trim(),
+    location = $("#job-location").value.trim();
+  if (keywords) url.searchParams.set(names[0], keywords);
+  if (location) url.searchParams.set(names[1], location);
+  if (kind === "jobs_adzuna")
+    url.pathname = `/v1/api/jobs/${$("#job-country").value}/search/1`;
+  $("#source-url").value = url.toString();
+}
+
+function useJobProvider(kind) {
+  const provider = state.meta?.job_providers?.find(
+    (item) => item.kind === kind,
+  );
+  if (!provider) return;
+  $("#source-kind").value = kind;
+  if (
+    !$("#source-name").value ||
+    $("#source-name").value.endsWith(" · Job listings")
+  )
+    $("#source-name").value = `${provider.name} · Job listings`;
+  $("#source-url").value = provider.url;
+  $("#source-enabled").checked = provider.configured;
+  $("#source-interval").value = String(provider.interval_minutes);
+  updateXSourceFields();
+  updateJobSourceFields();
+}
+
+function usePublicSourcePreset(index) {
+  const source = state.meta?.source_presets?.[index];
+  if (!source) return;
+  $("#source-kind").value = source.kind;
+  $("#source-name").value = source.name;
+  $("#source-url").value = source.url;
+  $("#source-enabled").checked = source.enabled;
+  $("#source-interval").value = String(source.interval_minutes);
+  updateXSourceFields();
+  updateJobSourceFields();
 }
 
 function updateXSourceFields() {
@@ -973,6 +1117,7 @@ function useXWatchlist(preset) {
       }[preset];
   $("#source-enabled").checked = false;
   updateXSourceFields();
+  updateJobSourceFields();
 }
 
 document.addEventListener("click", (event) => {
@@ -983,13 +1128,24 @@ document.addEventListener("click", (event) => {
   if (button.hasAttribute("data-platform")) {
     state.platform = button.dataset.platform;
     state.offset = 0;
+    if (state.platform === "jobs") {
+      state.sort = "newest";
+      $("#sort").value = "newest";
+    }
     loadOpportunities();
   }
   if (button.dataset.xPreset) useXWatchlist(button.dataset.xPreset);
+  if (button.dataset.jobProvider) useJobProvider(button.dataset.jobProvider);
+  if (button.hasAttribute("data-source-preset"))
+    usePublicSourcePreset(Number(button.dataset.sourcePreset));
   if (button.hasAttribute("data-kind"))
     navigate("discover", button.dataset.kind);
   if (button.hasAttribute("data-tab")) {
     state.kind = button.dataset.tab;
+    if (state.kind === "job") {
+      state.sort = "newest";
+      $("#sort").value = "newest";
+    }
     state.offset = 0;
     loadOpportunities();
   }
@@ -1059,6 +1215,17 @@ document.addEventListener("click", (event) => {
 
 $("#add-opportunity").addEventListener("click", openImport);
 $("#add-source").addEventListener("click", openSource);
+$("#add-job-source").addEventListener("click", () =>
+  requireManagement(() => {
+    $("#source-form").reset();
+    $("#source-error").hidden = true;
+    useJobProvider("jobs_arbeitnow");
+    showDialog("source-dialog");
+  }),
+);
+$("#job-keywords").addEventListener("input", syncJobSourceURL);
+$("#job-location").addEventListener("input", syncJobSourceURL);
+$("#job-country").addEventListener("change", syncJobSourceURL);
 $("#add-x-source").addEventListener("click", () =>
   requireManagement(() => {
     $("#source-form").reset();
@@ -1068,9 +1235,17 @@ $("#add-x-source").addEventListener("click", () =>
   }),
 );
 $("#source-kind").addEventListener("change", () => {
+  const provider = state.meta?.job_providers?.find(
+    (item) => item.kind === $("#source-kind").value,
+  );
+  if (provider) {
+    useJobProvider(provider.kind);
+    return;
+  }
   if ($("#source-kind").value.startsWith("x_"))
     $("#source-enabled").checked = false;
   updateXSourceFields();
+  updateJobSourceFields();
 });
 $("#x-search-query").addEventListener("input", syncXSourceURL);
 $("#refresh-all").addEventListener("click", () =>
@@ -1233,6 +1408,7 @@ $("#source-form").addEventListener("submit", (event) => {
           url: $("#source-url").value.trim(),
           kind: $("#source-kind").value,
           enabled: $("#source-enabled").checked,
+          interval_minutes: Number($("#source-interval").value),
         }),
       });
       closeDialog("source-dialog");

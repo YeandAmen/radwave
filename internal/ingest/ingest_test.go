@@ -115,6 +115,16 @@ func TestDOMFallbackAndUnknownEngagement(t *testing.T) {
 	}
 }
 
+func TestUniversityJobFeedDecodesDeclaredLatin1Encoding(t *testing.T) {
+	rss := []byte(`<?xml version="1.0" encoding="ISO-8859-1"?><rss><channel><item><title>Research Associate</title><link>https://university.example.org/jobs/123</link><description>Salary: `)
+	rss = append(rss, 0xa3)
+	rss = append(rss, []byte(`40000 per year</description></item></channel></rss>`)...)
+	posts, err := ingest.ParseFeed(rss, "https://university.example.org/RSS/rss.aspx", 10)
+	if err != nil || len(posts) != 1 || !strings.Contains(posts[0].Body, "£40000") {
+		t.Fatalf("Latin-1 job RSS lost its salary text: %+v, %v", posts, err)
+	}
+}
+
 func TestPublisherJSONLDTitleEntitiesAreHumanReadable(t *testing.T) {
 	page := `<article><script type="application/ld+json">{"@type":"BlogPosting","headline":"Telemachus &amp; Athena Mentoring Programme","articleBody":"Applications are open for young leaders."}</script></article>`
 	post, err := ingest.ParsePage([]byte(page), "https://example.org/mentoring")
@@ -142,6 +152,9 @@ func TestURLSafetyAndCanonicalization(t *testing.T) {
 	}
 	if got := ingest.CanonicalURL("https://example.org/apply?program=42&utm_source=share"); got != "https://example.org/apply?program=42" {
 		t.Fatalf("removed a meaningful query parameter: %q", got)
+	}
+	if got := ingest.CanonicalURL("https://university.example.org/Vacancy.aspx?ref=ABC123&utm_source=rss"); got != "https://university.example.org/Vacancy.aspx?ref=ABC123" {
+		t.Fatal("a meaningful career-portal vacancy reference was removed")
 	}
 	if ingest.IsOpportunity(model.Post{Title: "Our incubation programme celebration", Body: "Congratulations to the businesses that graduated today."}) {
 		t.Fatal("classified a celebration as an application opportunity")

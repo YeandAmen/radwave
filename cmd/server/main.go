@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/YeandAmen/radwave/internal/deployment"
+	"github.com/YeandAmen/radwave/internal/ingest"
 )
 
 func main() {
@@ -39,6 +40,7 @@ func serve() error {
 		DatabaseURL: url, Addr: ":" + port, AdminToken: os.Getenv("RADAR_ADMIN_TOKEN"), CronSecret: os.Getenv("CRON_SECRET"),
 		RequireSharedStorage: os.Getenv("VERCEL") != "",
 		XBearerToken:         os.Getenv("X_BEARER_TOKEN"),
+		JobCredentials:       ingest.JobCredentials{AdzunaAppID: os.Getenv("ADZUNA_APP_ID"), AdzunaAppKey: os.Getenv("ADZUNA_APP_KEY"), USAJobsAPIKey: os.Getenv("USAJOBS_API_KEY"), USAJobsEmail: os.Getenv("USAJOBS_EMAIL"), ReedAPIKey: os.Getenv("REED_API_KEY"), JoobleAPIKey: os.Getenv("JOOBLE_API_KEY")},
 	})
 	if err != nil {
 		return err

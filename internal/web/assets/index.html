@@ -395,6 +395,16 @@
               original source and observation time.
             </p>
           </div>
+          <div class="job-source-intro" id="job-source-intro">
+            <strong>Fresh roles. The same Radwave.</strong>
+            <p>
+              Job APIs, public LinkedIn job listings, and university or NGO
+              feeds share your opportunity workspace.
+            </p>
+            <button class="inline-link" id="add-job-source">
+              Add a job source
+            </button>
+          </div>
           <div id="source-list" class="source-list" aria-live="polite"></div>
           <div
             class="x-connection"
@@ -456,8 +466,8 @@
       </div>
       <h2 id="import-title">One link.<br />A clearer opportunity.</h2>
       <p class="dialog-intro">
-        Add a public LinkedIn post, an X / Twitter post, or an opportunity
-        article. Bring the important details into focus.
+        Add a public LinkedIn post or job, an X / Twitter post, or an
+        opportunity article. Bring the important details into focus.
       </p>
       <form id="import-form">
         <label class="form-label" for="import-url"
@@ -545,15 +555,69 @@
         ><select class="form-input" id="source-kind">
           <option value="">Detect automatically</option>
           <option value="rss">RSS / Atom feed</option>
+          <option value="rss_jobs">Job-board RSS / Atom feed</option>
           <option value="linkedin_page">
             Public LinkedIn company / profile page
           </option>
           <option value="linkedin_post">Individual LinkedIn post</option>
+          <option value="linkedin_job">Individual LinkedIn job</option>
+          <option value="linkedin_jobs">Public LinkedIn job search</option>
           <option value="web_page">Opportunity article</option>
+          <option value="jobs_arbeitnow">Arbeitnow job API · no key</option>
+          <option value="jobs_usajobs">USAJobs job API</option>
+          <option value="jobs_reed">Reed job API</option>
+          <option value="jobs_jooble">Jooble job API</option>
+          <option value="jobs_adzuna">Adzuna job API</option>
           <option value="x_search">X / Twitter search watchlist</option>
           <option value="x_profile">X / Twitter profile timeline</option>
           <option value="x_post">Individual X / Twitter post</option>
         </select>
+        <div class="job-source-fields" id="job-source-fields" hidden>
+          <div
+            class="job-presets"
+            id="job-presets"
+            aria-label="Job API providers"
+          ></div>
+          <p class="form-hint" id="job-provider-note"></p>
+          <div id="job-search-fields" hidden>
+            <label class="form-label" for="job-keywords"
+              >Job search keywords <span>Optional</span></label
+            >
+            <input
+              class="form-input"
+              id="job-keywords"
+              maxlength="500"
+              placeholder="e.g. software, nursing, policy"
+            />
+            <label class="form-label" for="job-location"
+              >Search location <span>Optional</span></label
+            >
+            <input
+              class="form-input"
+              id="job-location"
+              maxlength="500"
+              placeholder="City or region"
+            />
+          </div>
+          <div id="job-country-field" hidden>
+            <label class="form-label" for="job-country"
+              >Adzuna country market</label
+            >
+            <select class="form-input" id="job-country">
+              <option value="gb">United Kingdom</option>
+              <option value="us">United States</option>
+              <option value="za">South Africa</option>
+              <option value="de">Germany</option>
+              <option value="ca">Canada</option>
+              <option value="au">Australia</option>
+              <option value="in">India</option>
+            </select>
+          </div>
+        </div>
+        <details class="verified-source-presets">
+          <summary>Verified job &amp; funding feeds</summary>
+          <div class="job-presets" id="public-source-presets"></div>
+        </details>
         <div class="x-search-fields" id="x-search-fields" hidden>
           <label class="form-label" for="x-search-query">X search query</label
           ><textarea
@@ -577,6 +641,19 @@
             Radwave’s shared pipeline.
           </p>
         </div>
+        <label class="form-label" for="source-interval">Refresh cadence</label>
+        <select class="form-input" id="source-interval">
+          <option value="30">Every 30 minutes</option>
+          <option value="10">Every 10 minutes</option>
+          <option value="15">Every 15 minutes</option>
+          <option value="60">Every hour</option>
+          <option value="180">Every 3 hours</option>
+          <option value="1440">Daily</option>
+        </select>
+        <p class="form-hint">
+          Scheduled checks honor the source cadence, provider minimums, and
+          access backoff.
+        </p>
         <label class="source-tracking"
           ><input type="checkbox" id="source-enabled" checked /> Enable source
           tracking</label

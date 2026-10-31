@@ -29,10 +29,18 @@ func (s *Server) export(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 		w.Header().Set("Content-Disposition", `attachment; filename="opportunities.csv"`)
 		writer := csv.NewWriter(w)
-		writer.Write([]string{"Title", "Type", "Organizer", "Deadline", "Deadline wording", "Status", "Region label", "Location", "Funding", "Eligibility", "Benefits", "Application URL", "Source post URL", "Publisher", "Reactions", "Comments", "Capture method", "Observed at", "Platform", "Post author", "Reposts", "Quotes"})
+		writer.Write([]string{"Title", "Type", "Organizer", "Deadline", "Deadline wording", "Status", "Region label", "Location", "Funding", "Eligibility", "Benefits", "Application URL", "Source post URL", "Publisher", "Reactions", "Comments", "Capture method", "Observed at", "Platform", "Post author", "Reposts", "Quotes", "Job provider", "Salary", "Employment type", "Remote"})
 		for _, o := range items {
 			row := []string{o.Title, o.Kind, o.Organizer, o.Deadline, o.DeadlineText, o.Status, o.Region, o.Location, o.Funding, strings.Join(o.Eligibility, " | "), strings.Join(o.Benefits, " | "), o.ApplicationURL, o.URL, o.SourceName, countString(o.Reactions), countString(o.Comments), o.CaptureMethod, o.LastFetchedAt.Format(time.RFC3339)}
 			row = append(row, model.Platform(o.SourceKind), o.PostAuthor, countString(o.Reposts), countString(o.Quotes))
+			job := []string{"", "", "", ""}
+			if o.Job != nil {
+				job[0], job[1], job[2] = o.Job.Provider, o.Job.Salary, o.Job.EmploymentType
+				if o.Job.Remote != nil {
+					job[3] = strconv.FormatBool(*o.Job.Remote)
+				}
+			}
+			row = append(row, job...)
 			for i := range row {
 				row[i] = safeCSV(row[i])
 			}
