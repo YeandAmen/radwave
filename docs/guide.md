@@ -102,6 +102,8 @@ The default source cadence is **30 minutes**, with **20 feed entries/API results
 
 The **Jobs** filter starts newest-first and includes job APIs, LinkedIn listings, and career feeds. Job cards show source-provided salary, employment type, employer, and publication/capture time where available. Open **Sources → Add a job source** to connect a provider or select a verified feed. See [Job sources](job-sources.md) for credentials, coverage, and provider access requirements.
 
+The [Kaggle catalogue](kaggle-catalogue.md) supplies the complete daily RoleBase dataset. Use **Kaggle catalogue** and **Skills, seniority & work preferences** to filter field, level, skill, remote work, entry-level-friendly flags, maximum experience, and lower dataset risk signals. Snapshot dates and closures remain visible alongside live-source provenance.
+
 ### Shortlist and share
 
 Use a card's bookmark button to save it. **My shortlist** is personal to that browser and origin. Copy a detail link to share an opportunity from a hosted instance.

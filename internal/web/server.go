@@ -3,8 +3,10 @@ package web
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/subtle"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -17,6 +19,7 @@ import (
 	"time"
 
 	"github.com/YeandAmen/radwave/internal/bootstrap"
+	"github.com/YeandAmen/radwave/internal/catalog"
 	"github.com/YeandAmen/radwave/internal/crawler"
 	"github.com/YeandAmen/radwave/internal/ingest"
 	"github.com/YeandAmen/radwave/internal/model"
@@ -42,6 +45,7 @@ type Server struct {
 	mux       *http.ServeMux
 	localOnly bool
 	writable  bool
+	catalog   *catalog.Service
 }
 
 func New(s *store.Store, engine *crawler.Engine, config Config) *Server {
@@ -51,12 +55,20 @@ func New(s *store.Store, engine *crawler.Engine, config Config) *Server {
 	host, _, _ := net.SplitHostPort(config.Addr)
 	local := host == "localhost" || net.ParseIP(host) != nil && net.ParseIP(host).IsLoopback()
 	server := &Server{store: s, engine: engine, config: config, mux: http.NewServeMux(), localOnly: local, writable: local || config.AdminToken != ""}
+	server.catalog = engine.Catalog
+	if server.catalog == nil {
+		server.catalog = catalog.New(s, "")
+	}
 	server.mux.HandleFunc("GET /{$}", server.index)
 	server.mux.HandleFunc("GET /opportunity/{id}", server.index)
 	static, _ := fs.Sub(assets, "assets")
 	server.mux.Handle("GET /assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(static))))
 	server.mux.HandleFunc("GET /healthz", server.health)
 	server.mux.HandleFunc("GET /api/meta", server.meta)
+	server.mux.HandleFunc("GET /api/catalog", server.catalogInfo)
+	server.mux.HandleFunc("POST /api/catalog/chunks", server.write(server.catalogChunk))
+	server.mux.HandleFunc("GET /api/catalog/upload-status", server.write(server.catalogUploadStatus))
+	server.mux.HandleFunc("POST /api/catalog/commit", server.write(server.catalogCommit))
 	server.mux.HandleFunc("GET /api/opportunities", server.opportunities)
 	server.mux.HandleFunc("GET /api/opportunities/{id}", server.opportunity)
 	server.mux.HandleFunc("GET /api/sources", server.sources)
@@ -139,6 +151,20 @@ func (s *Server) meta(w http.ResponseWriter, r *http.Request) {
 		internalError(w)
 		return
 	}
+	dataset, ready, err := s.catalog.Info(r.Context())
+	if err != nil {
+		internalError(w)
+		return
+	}
+	if ready {
+		stats.Total += dataset.Rows - dataset.Rejected - dataset.Duplicates
+		stats.Available += dataset.Open
+		stats.Regions["Not stated"] += dataset.Open
+		stats.Platforms["kaggle"] = dataset.Open
+		for kind, count := range dataset.Kinds {
+			stats.Kinds[kind] += count
+		}
+	}
 	runs, err := s.store.Runs(r.Context())
 	if err != nil {
 		internalError(w)
@@ -165,6 +191,7 @@ func (s *Server) meta(w http.ResponseWriter, r *http.Request) {
 		"x_watchlists":   ingest.XWatchlists,
 		"job_providers":  providers,
 		"source_presets": bootstrap.JobSources(),
+		"catalogue":      map[string]any{"ready": ready, "configured": s.catalog.Client.Configured(), "info": dataset},
 		"management":     map[string]bool{"enabled": s.writable, "token_required": s.config.AdminToken != ""},
 	})
 }
@@ -178,6 +205,15 @@ func query(r *http.Request) model.Query {
 		status = "active"
 	}
 	q := model.Query{Search: v.Get("q"), Kind: v.Get("kind"), Region: v.Get("region"), Status: status, Source: v.Get("source"), Platform: v.Get("platform"), Sort: v.Get("sort"), Limit: min(max(limit, 0), 200), Offset: min(max(offset, 0), 1000000)}
+	q.JobField, q.JobLevel, q.Skill = v.Get("field"), v.Get("level"), strings.ToLower(v.Get("skill"))
+	q.RemoteOnly = v.Get("remote") == "true"
+	q.FresherOnly = v.Get("fresher") == "true"
+	if n, err := strconv.Atoi(v.Get("max_years")); err == nil && n >= 0 && n <= 100 {
+		q.MaxYears = &n
+	}
+	if n, err := strconv.Atoi(v.Get("max_risk")); err == nil && n >= 0 && n <= 100 {
+		q.MaxRisk = &n
+	}
 	if ids := v.Get("ids"); ids != "" {
 		q.IDs = strings.Split(ids, ",")
 		if len(q.IDs) > 200 {
@@ -188,7 +224,7 @@ func query(r *http.Request) model.Query {
 }
 
 func (s *Server) opportunities(w http.ResponseWriter, r *http.Request) {
-	items, total, err := s.store.List(r.Context(), query(r))
+	items, total, err := s.catalog.List(r.Context(), query(r))
 	if err != nil {
 		internalError(w)
 		return
@@ -197,17 +233,83 @@ func (s *Server) opportunities(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) opportunity(w http.ResponseWriter, r *http.Request) {
-	opportunity, err := s.store.Get(r.Context(), r.PathValue("id"))
+	opportunity, history, err := s.catalog.Get(r.Context(), r.PathValue("id"))
 	if err != nil {
 		recordError(w, err)
 		return
 	}
-	history, err := s.store.History(r.Context(), opportunity.ID)
+	respond(w, http.StatusOK, map[string]any{"opportunity": opportunity, "history": history})
+}
+
+func (s *Server) catalogInfo(w http.ResponseWriter, r *http.Request) {
+	info, ready, err := s.catalog.Info(r.Context())
 	if err != nil {
 		internalError(w)
 		return
 	}
-	respond(w, http.StatusOK, map[string]any{"opportunity": opportunity, "history": history})
+	respond(w, http.StatusOK, map[string]any{"ready": ready, "info": info})
+}
+
+func (s *Server) catalogChunk(w http.ResponseWriter, r *http.Request) {
+	digest := r.URL.Query().Get("digest")
+	raw, err := hex.DecodeString(digest)
+	part, partErr := strconv.Atoi(r.URL.Query().Get("part"))
+	if err != nil || len(raw) != 32 || partErr != nil || part < 0 || part >= 128 {
+		fail(w, 400, "invalid dataset chunk identity")
+		return
+	}
+	data, err := io.ReadAll(io.LimitReader(r.Body, (1<<20)+1))
+	if err != nil || len(data) == 0 || len(data) > 1<<20 {
+		fail(w, 400, "dataset chunks must be 1 MB or smaller")
+		return
+	}
+	if err := s.store.StageCatalogChunk(r.Context(), digest, part, data); err != nil {
+		internalError(w)
+		return
+	}
+	respond(w, 200, map[string]any{"stored": true, "part": part})
+}
+
+func (s *Server) catalogUploadStatus(w http.ResponseWriter, r *http.Request) {
+	parts, err := s.store.CatalogParts(r.Context(), r.URL.Query().Get("digest"))
+	if err != nil {
+		internalError(w)
+		return
+	}
+	respond(w, 200, map[string]any{"parts": parts})
+}
+
+func (s *Server) catalogCommit(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Digest  string `json:"digest"`
+		Bytes   int    `json:"bytes"`
+		Version int    `json:"version"`
+	}
+	if !decode(w, r, &input) {
+		return
+	}
+	if input.Bytes <= 0 || input.Bytes > 128<<20 {
+		fail(w, 400, "unsupported dataset size")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 230*time.Second)
+	defer cancel()
+	data, err := s.store.CatalogArchive(ctx, input.Digest, input.Bytes)
+	if err != nil {
+		fail(w, 400, "dataset upload is incomplete")
+		return
+	}
+	hash := sha256.Sum256(data)
+	if hex.EncodeToString(hash[:]) != input.Digest {
+		fail(w, 400, "dataset upload checksum does not match")
+		return
+	}
+	info, err := s.catalog.Import(ctx, data, input.Version)
+	if err != nil {
+		fail(w, 422, err.Error())
+		return
+	}
+	respond(w, 200, map[string]any{"imported": true, "info": info})
 }
 
 func (s *Server) sources(w http.ResponseWriter, r *http.Request) {

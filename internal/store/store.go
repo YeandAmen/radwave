@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/YeandAmen/radwave/internal/model"
@@ -19,7 +20,11 @@ import (
 
 var ErrNotFound = errors.New("record not found")
 
-type Store struct{ db *database }
+type Store struct {
+	db          *database
+	catalogOnce sync.Once
+	catalogErr  error
+}
 
 func Open(path string) (*Store, error) {
 	if strings.HasPrefix(path, "postgres://") || strings.HasPrefix(path, "postgresql://") {

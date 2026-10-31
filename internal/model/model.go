@@ -12,15 +12,27 @@ import (
 
 var Kinds = []string{"program", "scholarship", "fellowship", "grant", "internship", "competition", "job", "bounty", "freelance", "research", "training", "conference", "volunteering"}
 var Regions = []string{"Worldwide", "Africa", "Americas", "Asia", "Europe", "Oceania", "Not stated"}
-var SourceKinds = []string{"linkedin_post", "linkedin_page", "linkedin_job", "linkedin_jobs", "rss", "rss_jobs", "web_page", "jobs_arbeitnow", "jobs_adzuna", "jobs_usajobs", "jobs_reed", "jobs_jooble", "x_search", "x_profile", "x_post", "x_archive"}
+var SourceKinds = []string{"linkedin_post", "linkedin_page", "linkedin_job", "linkedin_jobs", "rss", "rss_jobs", "web_page", "jobs_arbeitnow", "jobs_adzuna", "jobs_usajobs", "jobs_reed", "jobs_jooble", "kaggle_dataset", "x_search", "x_profile", "x_post", "x_archive"}
 
 type JobDetails struct {
-	Provider       string `json:"provider,omitempty"`
-	ProviderURL    string `json:"provider_url,omitempty"`
-	Salary         string `json:"salary,omitempty"`
-	EmploymentType string `json:"employment_type,omitempty"`
-	DeadlineLabel  string `json:"deadline_label,omitempty"`
-	Remote         *bool  `json:"remote,omitempty"`
+	Provider        string   `json:"provider,omitempty"`
+	ProviderURL     string   `json:"provider_url,omitempty"`
+	Salary          string   `json:"salary,omitempty"`
+	EmploymentType  string   `json:"employment_type,omitempty"`
+	DeadlineLabel   string   `json:"deadline_label,omitempty"`
+	Remote          *bool    `json:"remote,omitempty"`
+	Field           string   `json:"field,omitempty"`
+	Level           string   `json:"level,omitempty"`
+	Team            string   `json:"team,omitempty"`
+	Skills          []string `json:"skills,omitempty"`
+	YearsExperience *int     `json:"years_experience,omitempty"`
+	FresherFriendly *bool    `json:"fresher_friendly,omitempty"`
+	Openings        int      `json:"openings,omitempty"`
+	DatasetAsOf     string   `json:"dataset_as_of,omitempty"`
+	ClosedAt        string   `json:"closed_at,omitempty"`
+	SourceATS       string   `json:"source_ats,omitempty"`
+	RiskScore       *int     `json:"risk_score,omitempty"`
+	RiskReasons     string   `json:"risk_reasons,omitempty"`
 }
 
 type Opportunity struct {
@@ -67,6 +79,10 @@ type Opportunity struct {
 // never presented as confirmation that applications are open.
 func (o *Opportunity) Decorate(now time.Time) {
 	o.Status, o.DaysLeft = "unknown", nil
+	if o.Job != nil && o.Job.ClosedAt != "" {
+		o.Status = "closed"
+		return
+	}
 	if o.DeadlineState == "rolling" {
 		o.Status = "rolling"
 		return
@@ -151,16 +167,23 @@ type Stats struct {
 }
 
 type Query struct {
-	IDs      []string
-	Search   string
-	Kind     string
-	Region   string
-	Status   string
-	Source   string
-	Platform string
-	Sort     string
-	Limit    int
-	Offset   int
+	IDs         []string
+	Search      string
+	Kind        string
+	Region      string
+	Status      string
+	Source      string
+	Platform    string
+	Sort        string
+	Limit       int
+	Offset      int
+	JobField    string
+	JobLevel    string
+	RemoteOnly  bool
+	FresherOnly bool
+	Skill       string
+	MaxYears    *int
+	MaxRisk     *int
 }
 
 type Link struct {
@@ -190,6 +213,9 @@ type Post struct {
 }
 
 func Platform(sourceKind string) string {
+	if sourceKind == "kaggle_dataset" {
+		return "kaggle"
+	}
 	if strings.HasPrefix(sourceKind, "jobs_") {
 		return "jobs"
 	}

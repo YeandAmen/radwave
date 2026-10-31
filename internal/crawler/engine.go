@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/YeandAmen/radwave/internal/catalog"
 	"github.com/YeandAmen/radwave/internal/ingest"
 	"github.com/YeandAmen/radwave/internal/model"
 	"github.com/YeandAmen/radwave/internal/store"
@@ -26,6 +27,7 @@ type Engine struct {
 	Fetcher  ingest.Fetcher
 	X        ingest.XReader
 	Jobs     ingest.JobReader
+	Catalog  *catalog.Service
 	Interval time.Duration
 	MaxItems int
 	Logger   *slog.Logger
@@ -234,6 +236,17 @@ func (e *Engine) HasDueSources(ctx context.Context) (bool, error) {
 }
 
 func (e *Engine) crawlSource(ctx context.Context, source model.Source, force bool) sourceResult {
+	if source.Kind == "kaggle_dataset" {
+		result := sourceResult{warnings: []string{}}
+		if e.Catalog == nil {
+			result.err = errors.New("Kaggle catalogue is unavailable")
+		} else {
+			info, err := e.Catalog.Refresh(ctx)
+			result.err = err
+			result.seen = info.Open
+		}
+		return e.finishSource(ctx, source, result)
+	}
 	if strings.HasPrefix(source.Kind, "jobs_") {
 		return e.crawlJobSource(ctx, source)
 	}
@@ -708,6 +721,12 @@ func ValidateSource(source model.Source) error {
 		return errors.New("source refresh interval must be between 5 and 1440 minutes")
 	}
 	detected := ingest.SourceKind(source.URL)
+	if source.Kind == "kaggle_dataset" {
+		if ingest.CanonicalURL(source.URL) != catalog.DatasetURL {
+			return errors.New("use the supported RoleBase Kaggle dataset URL")
+		}
+		return nil
+	}
 	if strings.HasPrefix(source.Kind, "jobs_") {
 		return ingest.ValidateJobSource(source)
 	}

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/YeandAmen/radwave/internal/bootstrap"
+	"github.com/YeandAmen/radwave/internal/catalog"
 	"github.com/YeandAmen/radwave/internal/crawler"
 	"github.com/YeandAmen/radwave/internal/ingest"
 	"github.com/YeandAmen/radwave/internal/legacy"
@@ -41,8 +42,8 @@ func run(args []string) error {
 		fmt.Println("Radwave v0.2.0")
 		return nil
 	}
-	if !model.Contains([]string{"serve", "crawl", "import", "export", "migrate", "import-twitter"}, command) {
-		return fmt.Errorf("unknown command %q; use serve, crawl, import, export, migrate, import-twitter, or version", command)
+	if !model.Contains([]string{"serve", "crawl", "import", "export", "migrate", "import-twitter", "inspect-kaggle", "import-kaggle"}, command) {
+		return fmt.Errorf("unknown command %q; use serve, crawl, import, export, migrate, import-twitter, inspect-kaggle, import-kaggle, or version", command)
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
 	dbPath := flags.String("db", env("RADAR_DB", "data/radar.db"), "SQLite database path")
@@ -73,6 +74,9 @@ func run(args []string) error {
 	case "import-twitter":
 		migrateFrom = flags.String("from", "", "original Twitter scraper SQLite database")
 		envFile = flags.String("env-file", "", "private environment file containing the hosted DATABASE_URL")
+	case "inspect-kaggle", "import-kaggle":
+		migrateFrom = flags.String("from", "", "downloaded Kaggle ZIP archive")
+		envFile = flags.String("env-file", "", "private environment file containing DATABASE_URL")
 	}
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -83,7 +87,7 @@ func run(args []string) error {
 	if flags.NArg() > 0 {
 		return errors.New("unexpected positional arguments")
 	}
-	if command == "migrate" || command == "import-twitter" {
+	if command == "migrate" || command == "import-twitter" || command == "import-kaggle" {
 		if *envFile != "" {
 			if err := loadEnvironment(*envFile); err != nil {
 				return err
@@ -119,11 +123,45 @@ func run(args []string) error {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+	if command == "inspect-kaggle" {
+		if *migrateFrom == "" {
+			return errors.New("provide the Kaggle archive with -from")
+		}
+		data, err := os.ReadFile(*migrateFrom)
+		if err != nil {
+			return err
+		}
+		idx, err := catalog.Open(ctx, data)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(idx.Info)
+	}
 	s, err := store.Open(*dbPath)
 	if err != nil {
 		return err
 	}
 	defer s.Close()
+	if command == "import-kaggle" {
+		if *migrateFrom == "" {
+			return errors.New("provide the Kaggle archive with -from")
+		}
+		data, err := os.ReadFile(*migrateFrom)
+		if err != nil {
+			return err
+		}
+		service := catalog.New(s, os.Getenv("KAGGLE_API_TOKEN"))
+		meta, metaErr := service.Client.Metadata(ctx)
+		version := 0
+		if metaErr == nil {
+			version = meta.Version
+		}
+		info, err := service.Import(ctx, data, version)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(info)
+	}
 	if command == "import-twitter" {
 		if *migrateFrom == "" {
 			return errors.New("provide the legacy database with -from")
@@ -152,6 +190,7 @@ func run(args []string) error {
 		}
 	}
 	engine := crawler.New(s, ingest.NewHTTPFetcher(timeout, delay), interval)
+	engine.Catalog = catalog.New(s, os.Getenv("KAGGLE_API_TOKEN"))
 	engine.Jobs = ingest.NewJobClient(ingest.JobCredentials{AdzunaAppID: os.Getenv("ADZUNA_APP_ID"), AdzunaAppKey: os.Getenv("ADZUNA_APP_KEY"), USAJobsAPIKey: os.Getenv("USAJOBS_API_KEY"), USAJobsEmail: os.Getenv("USAJOBS_EMAIL"), ReedAPIKey: os.Getenv("REED_API_KEY"), JoobleAPIKey: os.Getenv("JOOBLE_API_KEY")})
 	engine.X = ingest.NewXClient(env("X_BEARER_TOKEN", os.Getenv("TWITTER_BEARER_TOKEN")))
 	if *seed && engine.X.Configured() {

@@ -24,4 +24,4 @@ The [original Twitter scraper](https://github.com/YeandAmen/twitter-scrapper) no
 
 Jobs also arrive through structured APIs and verified university/NGO feeds, with newest-first discovery and source-specific refresh cadences.
 
-[Setup & usage guide](docs/guide.md) · [Job sources](docs/job-sources.md) · [Architecture](docs/architecture.md)
+[Setup & usage guide](docs/guide.md) · [Job sources](docs/job-sources.md) · [Kaggle catalogue](docs/kaggle-catalogue.md) · [Architecture](docs/architecture.md)

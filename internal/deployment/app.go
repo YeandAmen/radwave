@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/YeandAmen/radwave/internal/bootstrap"
+	"github.com/YeandAmen/radwave/internal/catalog"
 	"github.com/YeandAmen/radwave/internal/crawler"
 	"github.com/YeandAmen/radwave/internal/ingest"
 	"github.com/YeandAmen/radwave/internal/store"
@@ -23,6 +24,7 @@ type Config struct {
 	RequireSharedStorage bool
 	XBearerToken         string
 	JobCredentials       ingest.JobCredentials
+	KaggleToken          string
 }
 
 type App struct {
@@ -47,6 +49,7 @@ func New(ctx context.Context, config Config) (*App, error) {
 		return nil, err
 	}
 	e := crawler.New(s, ingest.NewHTTPFetcher(20*time.Second, 2*time.Second), 30*time.Minute)
+	e.Catalog = catalog.New(s, config.KaggleToken)
 	e.Jobs = ingest.NewJobClient(config.JobCredentials)
 	e.X = ingest.NewXClient(config.XBearerToken)
 	if e.X.Configured() {

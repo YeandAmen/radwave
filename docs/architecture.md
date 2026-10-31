@@ -24,6 +24,7 @@ Pasted text / legacy X archive ────────────────�
 - `internal/ingest/x.go`: fixed-host X API access, watchlist/profile pagination, long-post text, expanded links, and public engagement counters.
 - `internal/ingest/jobs.go`: job-provider requests/authentication and normalization into the shared `model.Post` schema.
 - `internal/ingest/job_page.go`: public `JobPosting` JSON-LD, LinkedIn job descriptions, and listing discovery.
+- `internal/catalog`: complete RoleBase/Kaggle CSV parsing, compact immutable search index, daily API updates, and normalized result merging.
 - `internal/legacy`: imports the original Twitter scraper's opportunity records into Radwave's schema.
 - `internal/crawler`: source coordination, conditional feed requests, bounded discovery, and refresh/backoff logic.
 - `internal/store`: SQLite/PostgreSQL persistence, filtering, deduplication, and update histories.
@@ -38,6 +39,8 @@ Pasted text / legacy X archive ────────────────�
 Twitter/X is an additional adapter in this pipeline. Search watchlists and profile timelines keep pagination/high-water checkpoints in source state; individual posts and batched captured posts refresh metrics. X API rate limits and access failures produce persisted status/backoff rather than blocking sleeps. The frontend filters a single opportunity store by platform, and all sources share the same crawl lease, extraction rules, histories, and exports.
 
 Job APIs implement `JobReader` and return the same post records as HTML/RSS adapters. `rss_jobs` adds explicit job-board context rather than relying on scholarship-style keywords. Lightweight API sources are prioritized ahead of article expansion, and source-specific cadences are bounded by provider minimums. Credentials remain server-side; stored URLs contain only public filters. XML feed parsing supports declared legacy encodings used by university career systems.
+
+The Kaggle catalogue is retained as a compressed, chunked snapshot with an atomic manifest. A cached Go index searches all rows and normalizes only requested results; it merges with live records without replacing their bodies. Owner-authenticated uploads are resumable and checksum-validated. Closed-at, posted, first-seen and snapshot dates remain distinct, and inferred classifications are attributed to the dataset. A daily source refresh checks the dataset version before downloading it.
 
 1. Sources are selected from enabled records that are due for a refresh. A manual refresh can bypass the due time.
 2. Up to two sources run concurrently. Requests to the same host are separated by two seconds by default.

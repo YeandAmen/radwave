@@ -322,6 +322,55 @@
               >
             </div>
           </details>
+          <details class="filter-options job-filter-options" id="job-filters">
+            <summary>Skills, seniority &amp; work preferences</summary>
+            <div class="filter-bar">
+              <label class="select-field"
+                ><span>Career field</span
+                ><select id="job-field" aria-label="Career field">
+                  <option value="">All fields</option>
+                </select></label
+              >
+              <label class="select-field"
+                ><span>Seniority</span
+                ><select id="job-level" aria-label="Seniority">
+                  <option value="">All levels</option>
+                </select></label
+              >
+              <label class="select-field"
+                ><span>Required skill</span
+                ><input
+                  class="form-input"
+                  id="job-skill"
+                  aria-label="Required skill"
+                  placeholder="e.g. python, excel, cpr"
+              /></label>
+              <label class="select-field"
+                ><span>Maximum experience</span
+                ><select id="job-years" aria-label="Maximum experience">
+                  <option value="">Any / unstated</option>
+                  <option value="0">0 years</option>
+                  <option value="2">Up to 2 years</option>
+                  <option value="5">Up to 5 years</option>
+                  <option value="10">Up to 10 years</option>
+                </select></label
+              >
+            </div>
+            <div class="job-preferences">
+              <label
+                ><input type="checkbox" id="remote-only" /> Remote roles</label
+              >
+              <label
+                ><input type="checkbox" id="fresher-only" /> Entry-level
+                friendly (dataset flag)</label
+              >
+              <label
+                ><input type="checkbox" id="lower-risk" /> Lower dataset risk
+                signal (0–1)</label
+              >
+            </div>
+          </details>
+          <p class="catalog-notice" id="catalog-notice" hidden></p>
           <div
             class="category-tabs"
             id="category-tabs"
@@ -568,6 +617,9 @@
           <option value="jobs_reed">Reed job API</option>
           <option value="jobs_jooble">Jooble job API</option>
           <option value="jobs_adzuna">Adzuna job API</option>
+          <option value="kaggle_dataset">
+            RoleBase Kaggle catalogue · daily snapshot
+          </option>
           <option value="x_search">X / Twitter search watchlist</option>
           <option value="x_profile">X / Twitter profile timeline</option>
           <option value="x_post">Individual X / Twitter post</option>

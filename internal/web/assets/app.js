@@ -58,6 +58,7 @@ const kindIcons = {
   volunteering: "heart",
 };
 const sourceLabels = {
+  kaggle_dataset: "Kaggle daily dataset snapshot",
   linkedin_post: "LinkedIn post",
   linkedin_page: "Public LinkedIn page",
   rss: "RSS / Atom feed",
@@ -76,6 +77,7 @@ const sourceLabels = {
   x_archive: "Imported X archive",
 };
 const captures = {
+  kaggle_snapshot: "Kaggle dataset snapshot",
   public_page: "Public page capture",
   rss_summary: "RSS summary",
   manual_import: "Text import",
@@ -114,6 +116,13 @@ const state = {
   search: "",
   region: "",
   platform: "",
+  jobField: "",
+  jobLevel: "",
+  jobSkill: "",
+  jobYears: "",
+  remoteOnly: false,
+  fresherOnly: false,
+  lowerRisk: false,
   status: "active",
   sort: "deadline",
   offset: 0,
@@ -323,6 +332,7 @@ function updateMeta(meta) {
     : "· PUBLIC SOURCES";
   renderTypes();
   renderChannels();
+  renderJobFilters();
   renderRegions();
   window.RadwaveGlobe?.setCounts(stats.regions);
   const select = $("#region");
@@ -411,6 +421,7 @@ function renderChannels() {
   $("#channel-tabs").innerHTML = [
     ["", "All signals"],
     ["linkedin", "LinkedIn"],
+    ["kaggle", "Kaggle catalogue"],
     ["jobs", "Job APIs"],
     ["x", "X / Twitter"],
     ["rss", "Feeds"],
@@ -421,6 +432,45 @@ function renderChannels() {
         `<button class="channel-tab${state.platform === key ? " active" : ""}" data-platform="${key}" aria-pressed="${state.platform === key}">${label}<span>${key ? counts[key] || 0 : state.meta?.stats.available || 0}</span></button>`,
     )
     .join("");
+}
+
+function renderJobFilters() {
+  const info = state.meta?.catalogue?.info;
+  $("#job-filters").hidden = !(
+    state.meta?.catalogue?.ready ||
+    state.kind === "job" ||
+    state.kind === "internship"
+  );
+  for (const [id, counts, value] of [
+    ["job-field", info?.fields, state.jobField],
+    ["job-level", info?.levels, state.jobLevel],
+  ]) {
+    const select = $("#" + id);
+    select.innerHTML =
+      `<option value="">${id === "job-field" ? "All fields" : "All levels"}</option>` +
+      Object.keys(counts || {})
+        .sort()
+        .map(
+          (key) =>
+            `<option value="${esc(key)}">${esc(key)} · ${Number(counts[key]).toLocaleString()}</option>`,
+        )
+        .join("");
+    select.value = value;
+  }
+  $("#job-skill").value = state.jobSkill;
+  $("#job-years").value = state.jobYears;
+  $("#remote-only").checked = state.remoteOnly;
+  $("#fresher-only").checked = state.fresherOnly;
+  $("#lower-risk").checked = state.lowerRisk;
+  const notice = $("#catalog-notice");
+  notice.hidden = !state.meta?.catalogue?.ready;
+  if (!notice.hidden)
+    notice.textContent = `RoleBase / Kaggle · ${Number(info.open).toLocaleString()} listings open in the ${info.as_of} snapshot. Closure dates are respected. Levels, fields, skills and risk signals are dataset-derived; confirm current availability with the employer.`;
+}
+
+function resetJobFilters() {
+  state.jobField = state.jobLevel = state.jobSkill = state.jobYears = "";
+  state.remoteOnly = state.fresherOnly = state.lowerRisk = false;
 }
 
 async function loadHorizon() {
@@ -456,6 +506,13 @@ function params() {
   if (state.search) query.set("q", state.search);
   if (state.region) query.set("region", state.region);
   if (state.platform) query.set("platform", state.platform);
+  if (state.jobField) query.set("field", state.jobField);
+  if (state.jobLevel) query.set("level", state.jobLevel);
+  if (state.jobSkill) query.set("skill", state.jobSkill);
+  if (state.jobYears !== "") query.set("max_years", state.jobYears);
+  if (state.remoteOnly) query.set("remote", "true");
+  if (state.fresherOnly) query.set("fresher", "true");
+  if (state.lowerRisk) query.set("max_risk", "1");
   if (state.page === "saved") query.set("ids", [...state.saved].join(","));
   return query;
 }
@@ -476,6 +533,7 @@ function updateFilters() {
         x: "X / Twitter",
         linkedin: "LinkedIn",
         jobs: "Job APIs",
+        kaggle: "Kaggle catalogue",
         rss: "Feeds",
         web: "Articles",
       }[state.platform],
@@ -493,6 +551,7 @@ function updateFilters() {
   renderTypes();
   renderChannels();
   renderRegions();
+  renderJobFilters();
   window.RadwaveGlobe?.setRegion(state.region, false);
 }
 function skeletons() {
@@ -634,6 +693,7 @@ function renderCards() {
 function navigate(page, kind = "") {
   state.page = page;
   state.kind = kind;
+  resetJobFilters();
   if (kind === "job") {
     state.sort = "newest";
     $("#sort").value = "newest";
@@ -694,6 +754,7 @@ function closeWorkspace() {
 }
 
 function home() {
+  resetJobFilters();
   state.page = "discover";
   state.kind = "";
   state.search = "";
@@ -727,6 +788,7 @@ window.addEventListener("radwave:globe-ready", () => {
   window.RadwaveGlobe?.setRegion(state.region, false);
 });
 function clearFilters() {
+  resetJobFilters();
   state.kind = "";
   state.search = "";
   state.region = "";
@@ -868,6 +930,12 @@ function renderDetail(o, history) {
       publisher.textContent = `Published by ${o.post_author}`;
       $(".detail-source-box").append(publisher);
     }
+  }
+  if (o.job?.dataset_as_of) {
+    const facts = document.createElement("p");
+    facts.className = "dataset-facts";
+    facts.textContent = `Dataset snapshot: ${o.job.dataset_as_of}. Field: ${o.job.field || "unstated"} · Level: ${o.job.level || "unstated"} · ATS: ${o.job.source_ats || "unstated"}. ${o.job.years_experience != null ? `Extracted minimum experience: ${o.job.years_experience} years. ` : ""}${o.job.fresher_friendly === true ? "Dataset marks this role entry-level friendly. " : ""}${o.job.risk_score != null ? `Heuristic dataset risk signal: ${o.job.risk_score}${o.job.risk_reasons ? ` (${o.job.risk_reasons})` : ""}. ` : ""}${o.job.closed_at ? `Dataset reports closure on ${o.job.closed_at}.` : "Availability was last observed in the snapshot; check the employer's current listing."}`;
+    $(".job-details").append(facts);
   }
   if (o.reposts != null || o.quotes != null) {
     const metrics = document.createElement("p");
@@ -1226,6 +1294,34 @@ $("#add-job-source").addEventListener("click", () =>
 $("#job-keywords").addEventListener("input", syncJobSourceURL);
 $("#job-location").addEventListener("input", syncJobSourceURL);
 $("#job-country").addEventListener("change", syncJobSourceURL);
+for (const id of [
+  "job-field",
+  "job-level",
+  "job-years",
+  "remote-only",
+  "fresher-only",
+  "lower-risk",
+]) {
+  $("#" + id).addEventListener("change", () => {
+    state.jobField = $("#job-field").value;
+    state.jobLevel = $("#job-level").value;
+    state.jobYears = $("#job-years").value;
+    state.remoteOnly = $("#remote-only").checked;
+    state.fresherOnly = $("#fresher-only").checked;
+    state.lowerRisk = $("#lower-risk").checked;
+    state.offset = 0;
+    loadOpportunities();
+  });
+}
+let skillTimer;
+$("#job-skill").addEventListener("input", () => {
+  clearTimeout(skillTimer);
+  skillTimer = setTimeout(() => {
+    state.jobSkill = $("#job-skill").value.trim().toLowerCase();
+    state.offset = 0;
+    loadOpportunities();
+  }, 250);
+});
 $("#add-x-source").addEventListener("click", () =>
   requireManagement(() => {
     $("#source-form").reset();

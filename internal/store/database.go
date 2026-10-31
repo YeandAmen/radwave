@@ -171,7 +171,7 @@ func (d *database) statement(query string) string {
 			}
 			token := query[start:i]
 			switch token {
-			case "opportunities", "sources", "observations", "runs", "leases", "radar_schema":
+			case "opportunities", "sources", "observations", "runs", "leases", "radar_schema", "catalog_meta", "catalog_chunks":
 				out.WriteString(postgresSchema + "." + token)
 			default:
 				out.WriteString(token)

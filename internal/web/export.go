@@ -15,7 +15,7 @@ import (
 func (s *Server) export(w http.ResponseWriter, r *http.Request) {
 	q := query(r)
 	q.Limit, q.Offset = 10000, 0
-	items, total, err := s.store.List(r.Context(), q)
+	items, total, err := s.catalog.List(r.Context(), q)
 	if err != nil {
 		internalError(w)
 		return
@@ -29,7 +29,7 @@ func (s *Server) export(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 		w.Header().Set("Content-Disposition", `attachment; filename="opportunities.csv"`)
 		writer := csv.NewWriter(w)
-		writer.Write([]string{"Title", "Type", "Organizer", "Deadline", "Deadline wording", "Status", "Region label", "Location", "Funding", "Eligibility", "Benefits", "Application URL", "Source post URL", "Publisher", "Reactions", "Comments", "Capture method", "Observed at", "Platform", "Post author", "Reposts", "Quotes", "Job provider", "Salary", "Employment type", "Remote"})
+		writer.Write([]string{"Title", "Type", "Organizer", "Deadline", "Deadline wording", "Status", "Region label", "Location", "Funding", "Eligibility", "Benefits", "Application URL", "Source post URL", "Publisher", "Reactions", "Comments", "Capture method", "Observed at", "Platform", "Post author", "Reposts", "Quotes", "Job provider", "Salary", "Employment type", "Remote", "Career field", "Seniority", "Skills", "Minimum experience", "Entry-level friendly", "Dataset as of", "Closed at", "Dataset risk signal"})
 		for _, o := range items {
 			row := []string{o.Title, o.Kind, o.Organizer, o.Deadline, o.DeadlineText, o.Status, o.Region, o.Location, o.Funding, strings.Join(o.Eligibility, " | "), strings.Join(o.Benefits, " | "), o.ApplicationURL, o.URL, o.SourceName, countString(o.Reactions), countString(o.Comments), o.CaptureMethod, o.LastFetchedAt.Format(time.RFC3339)}
 			row = append(row, model.Platform(o.SourceKind), o.PostAuthor, countString(o.Reposts), countString(o.Quotes))
@@ -41,6 +41,20 @@ func (s *Server) export(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			row = append(row, job...)
+			dataset := make([]string, 8)
+			if o.Job != nil {
+				dataset[0], dataset[1], dataset[2], dataset[5], dataset[6] = o.Job.Field, o.Job.Level, strings.Join(o.Job.Skills, ";"), o.Job.DatasetAsOf, o.Job.ClosedAt
+				if o.Job.YearsExperience != nil {
+					dataset[3] = strconv.Itoa(*o.Job.YearsExperience)
+				}
+				if o.Job.FresherFriendly != nil {
+					dataset[4] = strconv.FormatBool(*o.Job.FresherFriendly)
+				}
+				if o.Job.RiskScore != nil {
+					dataset[7] = strconv.Itoa(*o.Job.RiskScore)
+				}
+			}
+			row = append(row, dataset...)
 			for i := range row {
 				row[i] = safeCSV(row[i])
 			}
@@ -77,7 +91,7 @@ type rssItem struct {
 }
 
 func (s *Server) feed(w http.ResponseWriter, r *http.Request) {
-	items, _, err := s.store.List(r.Context(), model.Query{Status: "active", Sort: "updated", Limit: 50})
+	items, _, err := s.catalog.List(r.Context(), model.Query{Status: "active", Sort: "updated", Limit: 50})
 	if err != nil {
 		internalError(w)
 		return
