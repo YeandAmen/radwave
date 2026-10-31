@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#16745d" />
+    <meta
+      name="description"
+      content="Discover programs, scholarships, grants, and experiences. Opportunity Radar turns public announcements into clear, actionable opportunities."
+    />
+    <title>Opportunity Radar — Your next chapter</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+    <link rel="stylesheet" href="/assets/app.css" />
+    <script src="/assets/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to opportunities</a>
+    <div class="sidebar-backdrop" id="sidebar-backdrop" hidden></div>
+    <aside class="sidebar" id="sidebar" aria-label="Main navigation">
+      <a class="brand" href="/" aria-label="Opportunity Radar home">
+        <span class="brand-mark"
+          ><svg aria-hidden="true">
+            <use href="/assets/icons.svg#radar"></use></svg
+        ></span>
+        <span
+          ><strong
+            >Opportunity<span class="brand-second"
+              >Radar<span class="brand-dot">.</span></span
+            ></strong
+          ></span
+        >
+      </a>
+      <div class="workspace-label">
+        <span class="workspace-dot"></span> YOUR OPPORTUNITY SPACE
+      </div>
+      <nav class="primary-nav">
+        <button
+          class="nav-item active"
+          data-page="discover"
+          aria-current="page"
+        >
+          <svg aria-hidden="true">
+            <use href="/assets/icons.svg#compass"></use></svg
+          ><span>Discover</span
+          ><span class="nav-count" id="discover-count">—</span>
+        </button>
+        <button class="nav-item" data-page="saved">
+          <svg aria-hidden="true">
+            <use href="/assets/icons.svg#bookmark"></use></svg
+          ><span>Saved opportunities</span
+          ><span class="nav-count" id="saved-count">0</span>
+        </button>
+        <button class="nav-item" data-page="closing">
+          <svg aria-hidden="true">
+            <use href="/assets/icons.svg#clock"></use></svg
+          ><span>Closing soon</span
+          ><span class="nav-count" id="closing-count">—</span>
+        </button>
+        <button class="nav-item" data-page="sources">
+          <svg aria-hidden="true">
+            <use href="/assets/icons.svg#radio"></use></svg
+          ><span>Sources & updates</span>
+        </button>
+      </nav>
+      <div class="nav-section-label">EXPLORE BY TYPE</div>
+      <nav class="type-nav" id="type-nav" aria-label="Opportunity types"></nav>
+      <div class="sidebar-bottom">
+        <div class="sidebar-note">
+          <span class="note-spark">✦</span
+          ><strong>A little discovery.<br />A whole new direction.</strong>
+          <p>Your next chapter could start with one opportunity.</p>
+        </div>
+        <button class="sync-status" id="sidebar-sync">
+          <span class="sync-dot" id="sync-dot"></span
+          ><span
+            ><strong id="sync-title">Ready to discover</strong
+            ><small id="sync-detail">Public sources, clear details</small></span
+          ><svg aria-hidden="true">
+            <use href="/assets/icons.svg#chevron-right"></use>
+          </svg>
+        </button>
+        <a
+          class="github-link"
+          href="https://github.com/YeandAmen/opportunity-radar"
+          target="_blank"
+          rel="noopener noreferrer"
+          ><svg aria-hidden="true">
+            <use href="/assets/icons.svg#github"></use>
+          </svg>
+          Open source. Open possibilities.</a
+        >
+      </div>
+    </aside>
+
+    <div class="app-shell">
+      <header class="topbar">
+        <button
+          class="icon-button mobile-menu"
+          id="mobile-menu"
+          aria-label="Open navigation"
+          aria-expanded="false"
+        >
+          <svg aria-hidden="true">
+            <use href="/assets/icons.svg#menu"></use>
+          </svg>
+        </button>
+        <div class="breadcrumb">
+          <span>Your next chapter</span
+          ><svg aria-hidden="true">
+            <use href="/assets/icons.svg#chevron-right"></use></svg
+          ><strong id="breadcrumb-page">Discover</strong>
+        </div>
+        <div class="topbar-actions">
+          <button
+            class="icon-button"
+            id="unlock-button"
+            aria-label="Unlock management"
+            title="Unlock management"
+            hidden
+          >
+            <svg aria-hidden="true">
+              <use href="/assets/icons.svg#lock"></use>
+            </svg>
+          </button>
+          <a
+            class="icon-button rss-link"
+            href="/feed.xml"
+            target="_blank"
+            rel="noopener"
+            aria-label="Subscribe to the RSS digest"
+            title="RSS digest"
+            ><svg aria-hidden="true">
+              <use href="/assets/icons.svg#rss"></use></svg
+          ></a>
+          <button
+            class="button button-quiet"
+            id="export-button"
+            aria-label="Export opportunities"
+          >
+            <svg aria-hidden="true">
+              <use href="/assets/icons.svg#download"></use></svg
+            ><span>Export</span>
+          </button>
+          <button
+            class="button button-primary"
+            id="add-opportunity"
+            aria-label="Add opportunity"
+          >
+            <svg aria-hidden="true">
+              <use href="/assets/icons.svg#plus"></use></svg
+            ><span>Add opportunity</span>
+          </button>
+        </div>
+      </header>
+
+      <main id="main-content" tabindex="-1">
+        <section class="hero" id="hero" aria-labelledby="hero-title">
+          <div class="hero-copy">
+            <div class="eyebrow"><span></span> A WORLD OF POSSIBILITIES</div>
+            <h1 id="hero-title">
+              Good opportunities.<br /><span>Less noise.</span>
+            </h1>
+            <p>
+              Programs, funding, and experiences worth your next move.<br
+                class="desktop-break"
+              />
+              Discovered in public. Made clear for you.
+            </p>
+            <a class="hero-link" href="#opportunity-section"
+              >Find your next opportunity
+              <svg aria-hidden="true">
+                <use href="/assets/icons.svg#arrow-right"></use></svg
+            ></a>
+            <div class="hero-footnote">
+              <svg aria-hidden="true">
+                <use href="/assets/icons.svg#check-circle"></use>
+              </svg>
+              Clear requirements <span>·</span> Real sources
+              <span>·</span> Original links
+            </div>
+          </div>
+          <div class="hero-art" aria-hidden="true">
+            <div class="radar-orbit orbit-one"></div>
+            <div class="radar-orbit orbit-two"></div>
+            <div class="radar-orbit orbit-three"></div>
+            <div class="radar-axis axis-one"></div>
+            <div class="radar-axis axis-two"></div>
+            <div class="radar-sweep"></div>
+            <div class="radar-center">
+              <svg><use href="/assets/icons.svg#sparkles"></use></svg>
+            </div>
+            <div class="orbit-dot dot-one"></div>
+            <div class="orbit-dot dot-two"></div>
+            <div class="orbit-dot dot-three"></div>
+            <div class="orbit-label label-one">
+              <span class="mini-icon purple"
+                ><svg>
+                  <use href="/assets/icons.svg#graduation"></use></svg></span
+              ><span
+                ><small>INVEST IN YOU</small><strong>Scholarships</strong></span
+              ><span class="label-plus">↗</span>
+            </div>
+            <div class="orbit-label label-two">
+              <span class="mini-icon green"
+                ><svg><use href="/assets/icons.svg#sprout"></use></svg></span
+              ><span
+                ><small>BUILD SOMETHING</small
+                ><strong>Programs & grants</strong></span
+              ><span class="label-plus">↗</span>
+            </div>
+            <div class="orbit-label label-three">
+              <span class="mini-icon peach"
+                ><svg><use href="/assets/icons.svg#briefcase"></use></svg></span
+              ><span
+                ><small>TAKE THE NEXT STEP</small
+                ><strong>Fellowships</strong></span
+              >
+            </div>
+            <span class="art-spark spark-one">✦</span
+            ><span class="art-spark spark-two">✧</span>
+          </div>
+        </section>
+
+        <section
+          class="stats-grid"
+          id="stats-grid"
+          aria-label="Opportunity overview"
+        >
+          <div class="stat-card">
+            <span class="stat-icon green"
+              ><svg aria-hidden="true">
+                <use href="/assets/icons.svg#compass"></use></svg
+            ></span>
+            <div>
+              <span class="stat-label">Available opportunities</span
+              ><strong id="stat-available">—</strong>
+            </div>
+            <span class="stat-caption">A next step awaits</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-icon peach"
+              ><svg aria-hidden="true">
+                <use href="/assets/icons.svg#clock"></use></svg
+            ></span>
+            <div>
+              <span class="stat-label">Closing in 7 days</span
+              ><strong id="stat-closing">—</strong>
+            </div>
+            <span class="stat-caption">Make time for these</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-icon purple"
+              ><svg aria-hidden="true">
+                <use href="/assets/icons.svg#radio"></use></svg
+            ></span>
+            <div>
+              <span class="stat-label">Tracked sources</span
+              ><strong id="stat-sources">—</strong>
+            </div>
+            <span class="stat-caption">Public & traceable</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-icon blue"
+              ><svg aria-hidden="true">
+                <use href="/assets/icons.svg#refresh"></use></svg
+            ></span>
+            <div>
+              <span class="stat-label">Updated today</span
+              ><strong id="stat-updated">—</strong>
+            </div>
+            <span class="stat-caption">Keep your radar on</span>
+          </div>
+        </section>
+
+        <section id="opportunity-section" aria-labelledby="feed-title">
+          <div class="section-heading">
+            <div>
+              <h2 id="feed-title">
+                Explore opportunities
+                <span id="result-count" class="count-pill">—</span>
+              </h2>
+              <p id="feed-subtitle">
+                Big ambitions start with a small discovery.
+              </p>
+            </div>
+            <div class="view-toggle" role="group" aria-label="Display layout">
+              <button
+                class="active"
+                id="grid-view"
+                aria-label="Grid view"
+                aria-pressed="true"
+              >
+                <svg aria-hidden="true">
+                  <use href="/assets/icons.svg#grid"></use>
+                </svg></button
+              ><button
+                id="list-view"
+                aria-label="List view"
+                aria-pressed="false"
+              >
+                <svg aria-hidden="true">
+                  <use href="/assets/icons.svg#list"></use>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div
+            class="category-tabs"
+            id="category-tabs"
+            aria-label="Filter opportunity types"
+          ></div>
+          <div class="filter-bar">
+            <label class="search-field"
+              ><svg aria-hidden="true">
+                <use href="/assets/icons.svg#search"></use></svg
+              ><span class="sr-only">Search opportunities</span
+              ><input
+                id="search"
+                type="search"
+                placeholder="Search programs, skills, or organizations…"
+                autocomplete="off"
+              /><kbd>/</kbd></label
+            >
+            <label class="select-field"
+              ><svg aria-hidden="true">
+                <use href="/assets/icons.svg#globe"></use></svg
+              ><span class="sr-only">Region</span
+              ><select id="region">
+                <option value="">All regions</option>
+              </select></label
+            >
+            <label class="select-field status-filter"
+              ><svg aria-hidden="true">
+                <use href="/assets/icons.svg#filter"></use></svg
+              ><span class="sr-only">Application status</span
+              ><select id="status">
+                <option value="active">Not closed</option>
+                <option value="closing">Closing soon</option>
+                <option value="rolling">Rolling applications</option>
+                <option value="unknown">Deadline unknown</option>
+                <option value="closed">Closed</option>
+                <option value="all">All statuses</option>
+              </select></label
+            >
+            <label class="select-field sort-field"
+              ><svg aria-hidden="true">
+                <use href="/assets/icons.svg#sort"></use></svg
+              ><span class="sr-only">Sort opportunities</span
+              ><select id="sort">
+                <option value="deadline">Deadline first</option>
+                <option value="newest">Newest first</option>
+                <option value="popular">Most reactions</option>
+                <option value="updated">Recently updated</option>
+              </select></label
+            >
+          </div>
+          <div class="active-filters" id="active-filters" hidden></div>
+          <div class="inline-notice" id="crawl-notice" hidden></div>
+          <div
+            class="opportunity-grid"
+            id="opportunity-grid"
+            aria-live="polite"
+            aria-busy="true"
+          ></div>
+          <div class="pagination" id="pagination" hidden>
+            <span id="page-summary"></span>
+            <div>
+              <button class="button button-quiet" id="previous-page">
+                ← Previous</button
+              ><button class="button button-quiet" id="next-page">
+                Next →
+              </button>
+            </div>
+          </div>
+          <p class="feed-footnote">
+            <svg aria-hidden="true">
+              <use href="/assets/icons.svg#info"></use>
+            </svg>
+            Missing details stay unconfirmed. Always check the original
+            announcement before applying.
+          </p>
+        </section>
+
+        <section id="sources-section" aria-labelledby="sources-title" hidden>
+          <div class="section-heading">
+            <div>
+              <div class="eyebrow small-eyebrow">KEEP YOUR RADAR ON</div>
+              <h1 id="sources-title">Sources & updates</h1>
+              <p>
+                Follow the publishers that open doors. See what was actually
+                refreshed.
+              </p>
+            </div>
+            <div class="section-actions">
+              <button class="button button-quiet" id="refresh-all">
+                <svg aria-hidden="true">
+                  <use href="/assets/icons.svg#refresh"></use></svg
+                >Refresh sources</button
+              ><button class="button button-primary" id="add-source">
+                <svg aria-hidden="true">
+                  <use href="/assets/icons.svg#plus"></use></svg
+                >Add source
+              </button>
+            </div>
+          </div>
+          <div class="source-explainer">
+            <span class="stat-icon green"
+              ><svg aria-hidden="true">
+                <use href="/assets/icons.svg#radio"></use></svg
+            ></span>
+            <div>
+              <strong>New discoveries. Honest coverage.</strong>
+              <p>
+                RSS and Atom feeds discover announcements. Public LinkedIn pages
+                discover the post links they expose. Individual posts are
+                refreshed for edits and engagement. Blocked pages are reported
+                and retried with backoff.
+              </p>
+            </div>
+          </div>
+          <div id="source-list" class="source-list" aria-live="polite"></div>
+          <div class="section-heading recent-heading">
+            <div>
+              <h2>Recent refreshes</h2>
+              <p>A clear trail from source to opportunity.</p>
+            </div>
+          </div>
+          <div class="run-list" id="run-list"></div>
+        </section>
+        <footer class="page-footer">
+          <span>Made for curious people with big plans.</span
+          ><span
+            ><span class="footer-dot"></span> Opportunity Radar
+            <span class="footer-version">v0.1</span></span
+          >
+        </footer>
+      </main>
+    </div>
+
+    <dialog
+      class="detail-dialog"
+      id="detail-dialog"
+      aria-labelledby="detail-title"
+    >
+      <div id="detail-content"></div>
+    </dialog>
+    <dialog
+      class="form-dialog"
+      id="import-dialog"
+      aria-labelledby="import-title"
+    >
+      <div class="dialog-heading">
+        <span class="stat-icon green"
+          ><svg aria-hidden="true">
+            <use href="/assets/icons.svg#link"></use></svg></span
+        ><button
+          class="icon-button"
+          data-close="import-dialog"
+          aria-label="Close import"
+        >
+          <svg aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg>
+        </button>
+      </div>
+      <h2 id="import-title">One link. A clearer opportunity.</h2>
+      <p class="dialog-intro">
+        Add a public LinkedIn post or opportunity article. We’ll bring the
+        important details into focus.
+      </p>
+      <form id="import-form">
+        <label class="form-label" for="import-url"
+          >Original post or article URL <span>Required</span></label
+        ><input
+          class="form-input"
+          id="import-url"
+          type="url"
+          placeholder="https://www.linkedin.com/posts/…"
+          required
+        />
+        <details class="paste-details" id="paste-details">
+          <summary>
+            Have the post text? Paste it instead.<svg aria-hidden="true">
+              <use href="/assets/icons.svg#chevron-down"></use>
+            </svg>
+          </summary>
+          <p>
+            Useful when a page isn’t publicly readable. Imported text is labeled
+            with its capture method.
+          </p>
+          <label class="form-label" for="import-text">Post text</label
+          ><textarea
+            class="form-input"
+            id="import-text"
+            rows="7"
+            placeholder="Paste the full announcement, including eligibility and deadline."
+          ></textarea
+          ><label class="form-label" for="import-organizer"
+            >Organizer <span>Optional</span></label
+          ><input
+            class="form-input"
+            id="import-organizer"
+            placeholder="Organization or program host"
+          />
+        </details>
+        <div class="form-error" id="import-error" role="alert" hidden></div>
+        <div class="form-footer">
+          <span>Source links are always preserved.</span
+          ><button
+            class="button button-primary"
+            id="import-submit"
+            type="submit"
+          >
+            <svg aria-hidden="true">
+              <use href="/assets/icons.svg#sparkles"></use></svg
+            >Bring into focus
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog
+      class="form-dialog"
+      id="source-dialog"
+      aria-labelledby="source-dialog-title"
+    >
+      <div class="dialog-heading">
+        <span class="stat-icon purple"
+          ><svg aria-hidden="true">
+            <use href="/assets/icons.svg#radio"></use></svg></span
+        ><button
+          class="icon-button"
+          data-close="source-dialog"
+          aria-label="Close source form"
+        >
+          <svg aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg>
+        </button>
+      </div>
+      <h2 id="source-dialog-title">Expand your radar.</h2>
+      <p class="dialog-intro">
+        Track a feed, a public LinkedIn page, or a specific announcement.
+      </p>
+      <form id="source-form">
+        <label class="form-label" for="source-name">Source name</label
+        ><input
+          class="form-input"
+          id="source-name"
+          required
+          maxlength="120"
+          placeholder="e.g. Opportunity Desk"
+        /><label class="form-label" for="source-url">Public source URL</label
+        ><input
+          class="form-input"
+          id="source-url"
+          type="url"
+          required
+          placeholder="https://example.org/feed/"
+        /><label class="form-label" for="source-kind">Source type</label
+        ><select class="form-input" id="source-kind">
+          <option value="">Detect automatically</option>
+          <option value="rss">RSS / Atom feed</option>
+          <option value="linkedin_page">
+            Public LinkedIn company / profile page
+          </option>
+          <option value="linkedin_post">Individual LinkedIn post</option>
+          <option value="web_page">Opportunity article</option>
+        </select>
+        <div class="form-error" id="source-error" role="alert" hidden></div>
+        <div class="form-footer">
+          <span>Up to 20 entries per refresh by default.</span
+          ><button
+            class="button button-primary"
+            id="source-submit"
+            type="submit"
+          >
+            Add to radar<svg aria-hidden="true">
+              <use href="/assets/icons.svg#arrow-right"></use>
+            </svg>
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog
+      class="form-dialog compact-dialog"
+      id="token-dialog"
+      aria-labelledby="token-title"
+    >
+      <div class="dialog-heading">
+        <span class="stat-icon green"
+          ><svg aria-hidden="true">
+            <use href="/assets/icons.svg#lock"></use></svg></span
+        ><button
+          class="icon-button"
+          data-close="token-dialog"
+          aria-label="Close token form"
+        >
+          <svg aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg>
+        </button>
+      </div>
+      <h2 id="token-title">Unlock your workspace.</h2>
+      <p class="dialog-intro">
+        Enter the management token configured on this server to add
+        opportunities and manage sources.
+      </p>
+      <form id="token-form">
+        <label class="form-label" for="admin-token">Management token</label
+        ><input
+          class="form-input"
+          id="admin-token"
+          type="password"
+          required
+          autocomplete="off"
+        />
+        <p class="form-hint">Kept only for this browser tab’s session.</p>
+        <div class="form-error" id="token-error" role="alert" hidden></div>
+        <div class="form-footer">
+          <button class="button button-primary" type="submit">
+            Unlock management<svg aria-hidden="true">
+              <use href="/assets/icons.svg#arrow-right"></use>
+            </svg>
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog
+      class="form-dialog compact-dialog"
+      id="export-dialog"
+      aria-labelledby="export-title"
+    >
+      <div class="dialog-heading">
+        <span class="stat-icon blue"
+          ><svg aria-hidden="true">
+            <use href="/assets/icons.svg#download"></use></svg></span
+        ><button
+          class="icon-button"
+          data-close="export-dialog"
+          aria-label="Close export"
+        >
+          <svg aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg>
+        </button>
+      </div>
+      <h2 id="export-title">Take your discoveries with you.</h2>
+      <p class="dialog-intro">
+        Export the current filters, including original source links and
+        extraction evidence.
+      </p>
+      <div class="export-options">
+        <button class="export-option" data-export="csv">
+          <strong>Spreadsheet <span>CSV</span></strong
+          ><small>Easy to share, sort, and shortlist.</small
+          ><svg aria-hidden="true">
+            <use href="/assets/icons.svg#arrow-right"></use>
+          </svg></button
+        ><button class="export-option" data-export="json">
+          <strong>Structured data <span>JSON</span></strong
+          ><small>All details, evidence, and source metadata.</small
+          ><svg aria-hidden="true">
+            <use href="/assets/icons.svg#arrow-right"></use>
+          </svg>
+        </button>
+      </div>
+    </dialog>
+
+    <div
+      id="toast-region"
+      class="toast-region"
+      aria-live="polite"
+      aria-atomic="true"
+    ></div>
+    <noscript
+      ><div class="noscript-message">
+        Enable JavaScript to use the dashboard. Structured opportunities are
+        also available at
+        <a href="/api/opportunities">/api/opportunities</a> and
+        <a href="/feed.xml">/feed.xml</a>.
+      </div></noscript
+    >
+  </body>
+</html>

@@ -1,0 +1,17 @@
+services:
+  radar:
+    build: .
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      RADAR_ADDR: "0.0.0.0:8080"
+      RADAR_DB: "/data/radar.db"
+      RADAR_INTERVAL: "30m"
+      RADAR_ADMIN_TOKEN: "${RADAR_ADMIN_TOKEN:-}"
+    volumes:
+      - radar-data:/data
+    restart: unless-stopped
+    stop_grace_period: 20s
+
+volumes:
+  radar-data:

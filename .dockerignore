@@ -1,0 +1,14 @@
+.git
+.github
+node_modules
+data
+dist
+.tmp
+test-results
+playwright-report
+docs/*.png
+.env
+.env.local
+*.db
+*.db-shm
+*.db-wal

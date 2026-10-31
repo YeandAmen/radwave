@@ -1,0 +1,13 @@
+/data/
+/dist/
+/.tmp/
+/node_modules/
+/test-results/
+/playwright-report/
+.env
+.env.local
+*.db
+*.db-shm
+*.db-wal
+*.log
+.DS_Store
