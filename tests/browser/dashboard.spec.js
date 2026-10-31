@@ -43,6 +43,10 @@ async function goTo(page, name, isMobile) {
     .locator(".primary-nav")
     .getByRole("button", { name, exact: false })
     .click();
+  if (name === "Discover")
+    await page
+      .getByRole("button", { name: "Find opportunities", exact: true })
+      .click();
 }
 async function unlock(page) {
   await expect(
@@ -61,8 +65,13 @@ test("discovery, extraction details, search, filters, and persistent shortlist",
 }) => {
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "Good opportunities. Less noise." }),
+    page.getByRole("heading", {
+      name: /Your next chapter,.*beautifully arranged\./,
+    }),
   ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Find opportunities", exact: true })
+    .click();
   await expect(page.locator(".opportunity-card").first()).toBeVisible();
   await page.locator('.category-tab[data-tab="scholarship"]').click();
   await expect(page.locator(".opportunity-card")).toHaveCount(1);
@@ -121,6 +130,8 @@ test("token-gated manual import preserves provenance and safely displays post te
   page,
 }, testInfo) => {
   await page.goto("/");
+  if (testInfo.project.name === "mobile")
+    await page.getByRole("button", { name: "Open navigation" }).click();
   await page
     .getByRole("button", { name: "Add opportunity", exact: true })
     .click();
@@ -134,7 +145,7 @@ test("token-gated manual import preserves provenance and safely displays post te
   await expect(page.locator("#token-error")).toBeVisible();
   await unlock(page);
   await expect(
-    page.getByRole("dialog", { name: "One link. A clearer opportunity." }),
+    page.getByRole("dialog", { name: /One link\..*A clearer opportunity\./ }),
   ).toBeVisible();
   const title = `Human Centered Fellowship (${testInfo.project.name})`;
   await page
@@ -175,7 +186,7 @@ test("sources can be added and paused without losing captured opportunities", as
     .getByLabel("Public source URL")
     .fill(`https://feeds.example.org/radar-${testInfo.project.name}.xml`);
   await page.getByLabel("Source type", { exact: true }).selectOption("rss");
-  await page.getByRole("button", { name: "Add to radar" }).click();
+  await page.getByRole("button", { name: "Add to Radwave" }).click();
   const row = page
     .locator(".source-row")
     .filter({ has: page.getByRole("heading", { name, exact: true }) });
@@ -199,10 +210,16 @@ test("sources can be added and paused without losing captured opportunities", as
 
 test("filtered exports produce usable CSV with original links", async ({
   page,
+  isMobile,
 }) => {
   await page.goto("/");
+  await page
+    .getByRole("button", { name: "Find opportunities", exact: true })
+    .click();
   await page.getByLabel("Search opportunities").fill("Open Futures");
   await expect(page.locator(".opportunity-card")).toHaveCount(1);
+  if (isMobile)
+    await page.getByRole("button", { name: "Open navigation" }).click();
   await page.getByRole("button", { name: "Export opportunities" }).click();
   const downloadPromise = page.waitForEvent("download");
   await page.getByRole("button", { name: /Spreadsheet CSV/ }).click();
@@ -219,7 +236,7 @@ test("keyboard search, responsive layout, and accessible discovery page", async 
   isMobile,
 }) => {
   await page.goto("/");
-  await expect(page.locator(".opportunity-card").first()).toBeVisible();
+  await expect(page.locator(".horizon-card").first()).toBeVisible();
   await page.keyboard.press("/");
   await expect(page.getByLabel("Search opportunities")).toBeFocused();
   await page.getByRole("button", { name: "List view", exact: true }).click();
@@ -236,6 +253,37 @@ test("keyboard search, responsive layout, and accessible discovery page", async 
   expect(accessibility.violations).toEqual([]);
   if (isMobile) {
     await page.getByRole("button", { name: "Open navigation" }).click();
-    await expect(page.locator("#sidebar")).toHaveClass(/nav-open/);
+    await expect(page.locator("body")).toHaveClass(/header-open/);
   }
+});
+
+test("globe regions open a focused workspace and keep discovery filters in sync", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.locator("#scene")).toHaveAttribute(
+    "data-scene-ready",
+    "true",
+    { timeout: 20000 },
+  );
+  await page.locator('#region-rail [data-region="Worldwide"]').click();
+  await expect(page.locator("#workspace")).toBeVisible();
+  await expect(page.locator("#region")).toHaveValue("Worldwide");
+  await expect(page.locator("#active-filters")).toContainText("Worldwide");
+  await page.locator("#filter-options summary").click();
+  await page
+    .getByLabel("Discovery region", { exact: true })
+    .selectOption("Not stated");
+  await expect(
+    page.locator('#region-rail [data-region="Worldwide"]'),
+  ).toHaveAttribute("aria-pressed", "false");
+  await page
+    .getByRole("button", { name: "Close opportunity workspace" })
+    .click();
+  await expect(page.locator("#workspace")).toBeHidden();
+  await expect(
+    page.getByRole("heading", {
+      name: /Your next chapter,.*beautifully arranged\./,
+    }),
+  ).toBeVisible();
 });

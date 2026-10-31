@@ -1,4 +1,4 @@
-name: Refresh hosted opportunities
+name: Refresh Radwave field notes
 
 on:
   schedule:

@@ -8,7 +8,7 @@ crawl:
 
 build:
 	mkdir -p dist
-	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o dist/opportunity-radar ./cmd/radar
+	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o dist/radwave ./cmd/radar
 
 test:
 	go test -race ./...

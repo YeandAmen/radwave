@@ -8,7 +8,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/YeandAmen/opportunity-radar/internal/model"
+	"github.com/YeandAmen/radwave/internal/model"
 )
 
 var (

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/YeandAmen/opportunity-radar/internal/model"
+	"github.com/YeandAmen/radwave/internal/model"
 )
 
 // CopyIntoEmpty copies source records and their complete observation histories

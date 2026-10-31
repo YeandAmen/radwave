@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/YeandAmen/opportunity-radar/internal/model"
+	"github.com/YeandAmen/radwave/internal/model"
 	nethtml "golang.org/x/net/html"
 )
 

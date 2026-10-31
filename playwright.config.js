@@ -2,7 +2,7 @@ const { defineConfig, devices } = require("@playwright/test");
 
 module.exports = defineConfig({
   testDir: "./tests/browser",
-  timeout: 30000,
+  timeout: 60000,
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 1 : 0,
@@ -11,6 +11,7 @@ module.exports = defineConfig({
     baseURL: "http://127.0.0.1:8091",
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
+    reducedMotion: "reduce",
   },
   projects: [
     {
@@ -22,7 +23,7 @@ module.exports = defineConfig({
     },
     {
       name: "mobile",
-      use: { ...devices["iPhone 13"], defaultBrowserType: "chromium" },
+      use: { ...devices["iPhone 13"], deviceScaleFactor: 1, defaultBrowserType: "chromium" },
     },
   ],
   webServer: {

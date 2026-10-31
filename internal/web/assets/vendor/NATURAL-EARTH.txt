@@ -1,0 +1,3 @@
+Country outlines: Natural Earth, public domain.
+https://www.naturalearthdata.com/about/terms-of-use/
+Dataset provided through the Sinnogram reference globe.

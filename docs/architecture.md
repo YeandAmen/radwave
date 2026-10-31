@@ -1,6 +1,6 @@
 # Architecture
 
-Opportunity Radar is a Go application with an embedded HTML/CSS/JavaScript dashboard. Standalone deployments use pure-Go SQLite; the Vercel deployment uses dedicated Neon PostgreSQL storage. It runs as one binary; Node.js is used only for development checks and deployment utilities.
+Radwave is a Go application with an embedded HTML/CSS/JavaScript dashboard. Standalone deployments use pure-Go SQLite; the Vercel deployment uses dedicated Neon PostgreSQL storage. It runs as one binary; Node.js is used only for development checks and deployment utilities.
 
 ```text
 RSS / Atom ──────┐
@@ -23,6 +23,7 @@ Pasted text ─────┘                                         │
 - `internal/store`: SQLite persistence, filtering, deduplication, and update histories.
 - `internal/bootstrap`: starter sources and the dated reference example.
 - `internal/web`: HTTP endpoints and the embedded dashboard.
+- `internal/web/assets/globe.js`: region exploration with a self-hosted MapLibre renderer and Natural Earth geometry.
 - `internal/deployment`: Vercel runtime configuration with shared storage and request-scoped refreshes.
 - `tests/browser`: isolated desktop/mobile functional and accessibility checks.
 

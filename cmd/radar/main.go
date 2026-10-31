@@ -16,12 +16,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/YeandAmen/opportunity-radar/internal/bootstrap"
-	"github.com/YeandAmen/opportunity-radar/internal/crawler"
-	"github.com/YeandAmen/opportunity-radar/internal/ingest"
-	"github.com/YeandAmen/opportunity-radar/internal/model"
-	"github.com/YeandAmen/opportunity-radar/internal/store"
-	"github.com/YeandAmen/opportunity-radar/internal/web"
+	"github.com/YeandAmen/radwave/internal/bootstrap"
+	"github.com/YeandAmen/radwave/internal/crawler"
+	"github.com/YeandAmen/radwave/internal/ingest"
+	"github.com/YeandAmen/radwave/internal/model"
+	"github.com/YeandAmen/radwave/internal/store"
+	"github.com/YeandAmen/radwave/internal/web"
 )
 
 func main() {
@@ -37,7 +37,7 @@ func run(args []string) error {
 		command, args = args[0], args[1:]
 	}
 	if command == "version" {
-		fmt.Println("Opportunity Radar v0.1.0")
+		fmt.Println("Radwave v0.2.0")
 		return nil
 	}
 	if !model.Contains([]string{"serve", "crawl", "import", "export", "migrate"}, command) {
@@ -150,7 +150,7 @@ func run(args []string) error {
 		}
 		errorsCh := make(chan error, 1)
 		go func() { errorsCh <- server.ListenAndServe() }()
-		slog.Info("Opportunity Radar is ready", "url", "http://"+*addr, "storage", s.Kind())
+		slog.Info("Radwave is ready", "url", "http://"+*addr, "storage", s.Kind())
 		if *autoCrawl {
 			go engine.Schedule(ctx, interval, true)
 		}

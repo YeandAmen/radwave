@@ -16,10 +16,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/YeandAmen/opportunity-radar/internal/crawler"
-	"github.com/YeandAmen/opportunity-radar/internal/ingest"
-	"github.com/YeandAmen/opportunity-radar/internal/model"
-	"github.com/YeandAmen/opportunity-radar/internal/store"
+	"github.com/YeandAmen/radwave/internal/crawler"
+	"github.com/YeandAmen/radwave/internal/ingest"
+	"github.com/YeandAmen/radwave/internal/model"
+	"github.com/YeandAmen/radwave/internal/store"
 )
 
 //go:embed assets/*
@@ -76,7 +76,7 @@ func New(s *store.Store, engine *crawler.Engine, config Config) *Server {
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; worker-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
 	if s.localOnly {
 		host := r.Host
 		if split, _, err := net.SplitHostPort(host); err == nil {
@@ -153,7 +153,7 @@ func (s *Server) meta(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	respond(w, http.StatusOK, map[string]any{
-		"name": "Opportunity Radar", "version": "0.1.0", "stats": stats, "last_run": latest,
+		"name": "Radwave", "version": "0.2.0", "stats": stats, "last_run": latest,
 		"running": s.engine.Running() || running, "kinds": model.Kinds, "regions": model.Regions,
 		"storage": s.store.Kind(), "hosted": s.config.SynchronousCrawls,
 		"management": map[string]bool{"enabled": s.writable, "token_required": s.config.AdminToken != ""},

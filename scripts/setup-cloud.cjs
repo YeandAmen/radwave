@@ -57,13 +57,7 @@ for (const [name, value] of Object.entries(secrets)) {
 }
 run(
   "gh",
-  [
-    "secret",
-    "set",
-    "RADAR_CRON_SECRET",
-    "--repo",
-    "YeandAmen/opportunity-radar",
-  ],
+  ["secret", "set", "RADAR_CRON_SECRET", "--repo", "YeandAmen/radwave"],
   secrets.CRON_SECRET,
 );
 console.log("Configured the app-scoped GitHub refresh secret.");

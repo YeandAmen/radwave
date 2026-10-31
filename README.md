@@ -1,16 +1,22 @@
-# Opportunity Radar
+# Radwave
 
-**Good opportunities. Less noise.**
+**Your next chapter, beautifully arranged.**
 
-**Live app: [opportunity-radar-yeandamen.vercel.app](https://opportunity-radar-yeandamen.vercel.app)**
+**Live app: [radwave.vercel.app](https://radwave.vercel.app)**
 
 A Go-powered crawler and a calm, human-friendly dashboard for programs, scholarships, fellowships, grants, internships, competitions, and other opportunities around the world.
 
-[![CI](https://github.com/YeandAmen/opportunity-radar/actions/workflows/ci.yml/badge.svg)](https://github.com/YeandAmen/opportunity-radar/actions/workflows/ci.yml)
+[![CI](https://github.com/YeandAmen/radwave/actions/workflows/ci.yml/badge.svg)](https://github.com/YeandAmen/radwave/actions/workflows/ci.yml)
 [![Go](https://img.shields.io/badge/Go-1.26%2B-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-![Opportunity Radar dashboard](docs/dashboard-desktop.png)
+![Radwave's globe-first opportunity explorer](docs/dashboard-desktop.png)
+
+## An opportunity workspace, beautifully placed
+
+Inspired by Sinnogram's spatial layout, Radwave combines a warm paper palette, a quiet top navigation, a geographic globe, and an opportunity workspace that opens on the right. The horizon strip keeps current announcements close; the workspace holds search, filters, your shortlist, deadlines, and source updates.
+
+The globe uses self-hosted MapLibre GL JS and public-domain Natural Earth country outlines. Clicking a region filters opportunities by their discovery labels. Region markers are approximate exploration points, not program locations or confirmation of country eligibility. The interface also works through text filters when WebGL is unavailable.
 
 ## What it does
 
@@ -29,14 +35,14 @@ The first version is source-based: it captures accessible content from the publi
 Go 1.26 or newer is required.
 
 ```sh
-git clone https://github.com/YeandAmen/opportunity-radar.git
-cd opportunity-radar
+git clone https://github.com/YeandAmen/radwave.git
+cd radwave
 go run ./cmd/radar serve
 ```
 
 Open **http://127.0.0.1:8080**.
 
-On a new database, Radar installs three starter sources and begins a public-source refresh:
+On a new database, Radwave installs three starter sources and begins a public-source refresh:
 
 1. The supplied **Nkabom Collaborative – UESD** business-incubation post on LinkedIn.
 2. **Opportunity Desk**, a global opportunity feed.
@@ -50,22 +56,22 @@ The application creates `data/radar.db`. Your database, local environment files,
 
 ```sh
 make build
-./dist/opportunity-radar serve
+./dist/radwave serve
 ```
 
 No Node.js installation, database server, LLM key, or LinkedIn login is needed to run the application.
 
-## Using your radar
+## Using Radwave
 
 ### Add an opportunity
 
-Click **Add opportunity** and enter an individual LinkedIn post or opportunity-article URL. Radar fetches the readable public announcement and extracts its fields.
+Click **Add a link** and enter an individual LinkedIn post or opportunity-article URL. Radwave fetches the readable public announcement and extracts its fields.
 
 If the page is unavailable, expand **Have the post text?** and paste the announcement. The result is marked **Text import**. Include the eligibility, application link, and complete deadline in the pasted text for the clearest result.
 
 ### Track a source
 
-Open **Sources & updates → Add source**. Give it a name and a URL, and choose or automatically detect its type:
+Open **Sources → Add source**. Give it a name and a URL, and choose or automatically detect its type:
 
 | Source                               | Discovery and refresh behavior                                          |
 | ------------------------------------ | ----------------------------------------------------------------------- |
@@ -80,9 +86,9 @@ The default schedule is every **30 minutes**, with **20 feed entries/page links 
 
 ### Shortlist and share
 
-Use a card's bookmark button to save it. **Saved opportunities** is personal to that browser and origin. Copy a detail link to share an opportunity from a hosted instance.
+Use a card's bookmark button to save it. **My shortlist** is personal to that browser and origin. Copy a detail link to share an opportunity from a hosted instance.
 
-Press **/** to focus search. Use **Export** for the current filters, or subscribe to `/feed.xml` for an opportunity digest.
+Press **/** to open and focus search. Expand **Region, status & sorting** for the full filters. Use **Export** for the current selection, or subscribe to `/feed.xml` for an opportunity digest.
 
 ## Commands
 
@@ -151,7 +157,7 @@ For a hosted instance, provide a management token and a persistent database path
 
 ```sh
 RADAR_ADDR=0.0.0.0:8080 RADAR_ADMIN_TOKEN="your-management-token" \
-  ./dist/opportunity-radar serve -db /data/radar.db
+  ./dist/radwave serve -db /data/radar.db
 ```
 
 The dashboard remains readable without the token. Its management controls prompt for the token before importing or changing sources. A non-local listening address without a token serves a read-only dashboard. Use one application replica per database and put the hosted service behind HTTPS.
@@ -217,6 +223,8 @@ The browser suite uses an isolated, in-memory Go server and synthetic test annou
 GitHub Actions runs both Go checks and desktop/mobile browser tests.
 
 For implementation details and precise coverage behavior, see [Architecture](docs/architecture.md).
+
+To rebuild the self-hosted globe assets, run `npm ci` and `npm run vendor:globe`. Go embeds the generated files; Node.js is used only during development and asset preparation.
 
 ## License
 

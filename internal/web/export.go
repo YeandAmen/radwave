@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/YeandAmen/opportunity-radar/internal/model"
+	"github.com/YeandAmen/radwave/internal/model"
 )
 
 func (s *Server) export(w http.ResponseWriter, r *http.Request) {
@@ -83,8 +83,8 @@ func (s *Server) feed(w http.ResponseWriter, r *http.Request) {
 			Items       []rssItem `xml:"item"`
 		} `xml:"channel"`
 	}
-	feed.Version, feed.Channel.Title = "2.0", "Opportunity Radar"
-	feed.Channel.Description, feed.Channel.Link = "Programs, funding, and experiences for your next chapter.", "https://github.com/YeandAmen/opportunity-radar"
+	feed.Version, feed.Channel.Title = "2.0", "Radwave"
+	feed.Channel.Description, feed.Channel.Link = "A world of opportunity, beautifully arranged.", "https://github.com/YeandAmen/radwave"
 	for _, o := range items {
 		deadline := o.Deadline
 		if deadline == "" {

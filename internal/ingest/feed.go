@@ -7,7 +7,7 @@ import (
 	"html"
 	"strings"
 
-	"github.com/YeandAmen/opportunity-radar/internal/model"
+	"github.com/YeandAmen/radwave/internal/model"
 )
 
 type feedItem struct {

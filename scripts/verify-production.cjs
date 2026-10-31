@@ -32,6 +32,7 @@ async function call(path, options = {}) {
   const before = await call("/api/meta");
   expect(before.storage).toBe("PostgreSQL");
   expect(before.hosted).toBe(true);
+  expect(before.name).toBe("Radwave");
   expect(before.stats.total).toBeGreaterThanOrEqual(23);
   const anonymous = await fetch(base + "/api/unlock", { method: "POST" });
   expect(anonymous.status).toBe(401);
@@ -75,11 +76,13 @@ async function call(path, options = {}) {
   try {
     const desktop = await browser.newPage({
       viewport: { width: 1440, height: 1000 },
+      reducedMotion: "reduce",
     });
     await desktop.goto(base);
-    await expect(
-      desktop.locator(".opportunity-card:not(.skeleton)").first(),
-    ).toBeVisible();
+    await expect(desktop.locator(".horizon-card").first()).toBeVisible();
+    await desktop
+      .getByRole("button", { name: "Find opportunities", exact: true })
+      .click();
     await desktop.getByLabel("Search opportunities").fill("incubation");
     await expect(desktop.locator(".opportunity-card")).toHaveCount(1);
     await desktop.locator(".card-title button").first().click();
@@ -90,18 +93,18 @@ async function call(path, options = {}) {
     const mobile = await browser.newPage({
       ...devices["iPhone 13"],
       defaultBrowserType: undefined,
+      deviceScaleFactor: 1,
+      reducedMotion: "reduce",
     });
     await mobile.goto(base);
-    await expect(
-      mobile.locator(".opportunity-card:not(.skeleton)").first(),
-    ).toBeVisible();
+    await expect(mobile.locator(".horizon-card").first()).toBeVisible();
     expect(
       await mobile.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth,
       ),
     ).toBe(true);
     await mobile.getByRole("button", { name: "Open navigation" }).click();
-    await expect(mobile.locator("#sidebar")).toHaveClass(/nav-open/);
+    await expect(mobile.locator("body")).toHaveClass(/header-open/);
   } finally {
     await browser.close();
   }

@@ -1,14 +1,16 @@
 {
-  "name": "opportunity-radar-browser-checks",
+  "name": "radwave-browser-checks",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Development-only browser checks; the application runs entirely in Go.",
   "scripts": {
     "test:e2e": "playwright test",
-    "test:e2e:ui": "playwright test --ui"
+    "test:e2e:ui": "playwright test --ui",
+    "vendor:globe": "node scripts/vendor-globe.cjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.10.2",
-    "@playwright/test": "1.56.1"
+    "@playwright/test": "1.56.1",
+    "maplibre-gl": "6.16.0"
   }
 }

@@ -93,7 +93,7 @@ func (f *HTTPFetcher) Fetch(ctx context.Context, raw string, headers http.Header
 	if err != nil {
 		return FetchResult{}, err
 	}
-	req.Header.Set("User-Agent", "OpportunityRadar/0.1 (+https://github.com/YeandAmen/opportunity-radar)")
+	req.Header.Set("User-Agent", "Radwave/0.2 (+https://github.com/YeandAmen/radwave)")
 	req.Header.Set("Accept", "text/html,application/rss+xml,application/atom+xml,application/xml;q=0.9,*/*;q=0.5")
 	req.Header.Set("Accept-Language", "en")
 	for key, values := range headers {

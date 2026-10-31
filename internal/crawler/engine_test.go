@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/YeandAmen/opportunity-radar/internal/bootstrap"
-	"github.com/YeandAmen/opportunity-radar/internal/crawler"
-	"github.com/YeandAmen/opportunity-radar/internal/ingest"
-	"github.com/YeandAmen/opportunity-radar/internal/model"
-	"github.com/YeandAmen/opportunity-radar/internal/store"
+	"github.com/YeandAmen/radwave/internal/bootstrap"
+	"github.com/YeandAmen/radwave/internal/crawler"
+	"github.com/YeandAmen/radwave/internal/ingest"
+	"github.com/YeandAmen/radwave/internal/model"
+	"github.com/YeandAmen/radwave/internal/store"
 )
 
 type response struct {

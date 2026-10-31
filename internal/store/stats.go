@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/YeandAmen/opportunity-radar/internal/model"
+	"github.com/YeandAmen/radwave/internal/model"
 )
 
 func (s *Store) Stats(ctx context.Context) (model.Stats, error) {

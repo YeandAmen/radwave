@@ -70,7 +70,13 @@ function readStorage(storage, key, fallback) {
 }
 let initialSaved = [];
 try {
-  const parsed = JSON.parse(readStorage(localStorage, "radar-saved", "[]"));
+  const parsed = JSON.parse(
+    readStorage(
+      localStorage,
+      "radwave-saved",
+      readStorage(localStorage, "radar-saved", "[]"),
+    ),
+  );
   if (Array.isArray(parsed))
     initialSaved = parsed.filter((id) => typeof id === "string");
 } catch {
@@ -85,9 +91,13 @@ const state = {
   sort: "deadline",
   offset: 0,
   pageSize: 12,
-  layout: readStorage(localStorage, "radar-layout", "grid"),
+  layout: readStorage(localStorage, "radwave-layout", "list"),
   saved: new Set(initialSaved),
-  token: readStorage(sessionStorage, "radar-token", ""),
+  token: readStorage(
+    sessionStorage,
+    "radwave-token",
+    readStorage(sessionStorage, "radar-token", ""),
+  ),
   meta: null,
   items: [],
   total: 0,
@@ -98,6 +108,8 @@ const state = {
   detailController: null,
   signature: "",
   pollBusy: false,
+  workspaceOpen: false,
+  horizonItems: [],
 };
 
 function safeURL(value) {
@@ -190,6 +202,7 @@ async function api(path, options = {}) {
     if (response.status === 401 && authToken === undefined) {
       state.token = "";
       try {
+        sessionStorage.removeItem("radwave-token");
         sessionStorage.removeItem("radar-token");
       } catch {
         /* Session memory still works. */
@@ -270,7 +283,16 @@ function updateMeta(meta) {
   $("#discover-count").textContent = stats.available;
   $("#closing-count").textContent = stats.closing_soon;
   $("#saved-count").textContent = state.saved.size;
+  $("#hero-saved-count").textContent = String(state.saved.size).padStart(
+    2,
+    "0",
+  );
+  $("#edition-status").textContent = meta.running
+    ? "· REFRESHING"
+    : "· PUBLIC SOURCES";
   renderTypes();
+  renderRegions();
+  window.RadwaveGlobe?.setCounts(stats.regions);
   const select = $("#region");
   if (select.options.length === 1)
     meta.regions.forEach((region) => select.add(new Option(region, region)));
@@ -278,7 +300,7 @@ function updateMeta(meta) {
   const sync = $("#sync-dot");
   sync.className = `sync-dot${meta.running ? " busy" : ["partial", "error", "interrupted"].includes(last?.status) ? " partial" : ""}`;
   $("#sync-title").textContent = meta.running
-    ? "Refreshing your radar"
+    ? "Refreshing Radwave"
     : last?.status === "completed"
       ? "Sources refreshed"
       : last
@@ -329,6 +351,47 @@ function renderTypes() {
     )
     .join("");
 }
+
+function renderRegions() {
+  const counts = state.meta?.stats.regions || {};
+  $("#region-rail").innerHTML = [
+    "",
+    "Worldwide",
+    "Africa",
+    "Americas",
+    "Europe",
+    "Asia",
+    "Oceania",
+  ]
+    .map(
+      (region) =>
+        `<button class="region-choice${state.region === region ? " active" : ""}" data-region="${region}" aria-pressed="${state.region === region}">${region ? (region === "Worldwide" ? "Worldwide" : region) : "All regions"}<span>${region ? counts[region] || 0 : (state.meta?.stats.available ?? "—")}</span></button>`,
+    )
+    .join("");
+}
+
+async function loadHorizon() {
+  const data = await api(
+    "/api/opportunities?status=active&sort=deadline&limit=8",
+  );
+  state.horizonItems = data.items;
+  renderHorizon();
+}
+
+function renderHorizon() {
+  const container = $("#horizon-strip");
+  if (!state.horizonItems.length) {
+    container.innerHTML =
+      '<p class="horizon-empty">Your next chapter starts with a source. Add a public announcement or explore your workspace.</p>';
+    return;
+  }
+  container.innerHTML = state.horizonItems
+    .map((o, index) => {
+      const saved = state.saved.has(o.id);
+      return `<article class="horizon-card"><div class="horizon-meta"><span>${String(index + 1).padStart(2, "0")} / ${esc(singular[o.kind] || "Program")}</span>${statusPill(o)}</div><h3><button data-open="${esc(o.id)}" aria-label="Preview ${esc(o.title)}">${esc(o.title)}</button></h3><div class="horizon-bottom"><span>${esc(deadlineLabel(o))}</span><button class="save-button${saved ? " saved" : ""}" data-save="${esc(o.id)}" aria-label="${saved ? "Remove from shortlist" : "Shortlist"} ${esc(o.title)}" aria-pressed="${saved}">${icon("bookmark")}</button></div></article>`;
+    })
+    .join("");
+}
 function params() {
   const query = new URLSearchParams({
     status: state.page === "closing" ? "closing" : state.status,
@@ -363,6 +426,8 @@ function updateFilters() {
       .join("") +
     '<button class="clear-filters" data-action="clear">Clear filters</button>';
   renderTypes();
+  renderRegions();
+  window.RadwaveGlobe?.setRegion(state.region, false);
 }
 function skeletons() {
   return Array.from(
@@ -446,7 +511,7 @@ function renderCards() {
         '<button class="button button-quiet" data-action="clear">Clear filters</button>';
       symbol = "search";
     } else if (state.meta?.running) {
-      heading = "Your radar is warming up.";
+      heading = "Your world is opening up.";
       text =
         "We’re reading the public sources. Opportunities will appear as each source finishes.";
       action = "";
@@ -478,27 +543,28 @@ function navigate(page, kind = "") {
   state.region = "";
   state.offset = 0;
   state.status = page === "saved" ? "all" : "active";
-  $("#hero").hidden = page !== "discover";
+  openWorkspace();
   $("#stats-grid").hidden = page === "sources" || page === "saved";
   $("#opportunity-section").hidden = page === "sources";
   $("#sources-section").hidden = page !== "sources";
-  const title = {
-    discover: "Discover",
-    saved: "Saved opportunities",
-    closing: "Closing soon",
-    sources: "Sources & updates",
+  $("#workspace-eyebrow").textContent = {
+    discover: "YOUR NEXT STEP, IN FOCUS",
+    saved: "THE POSSIBILITIES YOU KEPT",
+    closing: "A LITTLE TIME / A BIG POSSIBILITY",
+    sources: "WHERE POSSIBILITY BEGINS",
   }[page];
-  $("#breadcrumb-page").textContent = title;
   $("#feed-title").innerHTML =
-    `${page === "saved" ? "Your saved opportunities" : page === "closing" ? "A next step worth taking soon" : "Explore opportunities"} <span id="result-count" class="count-pill">—</span>`;
+    `${page === "saved" ? "Your shortlist." : page === "closing" ? "Worth taking soon." : "Find your next step."} <span id="result-count" class="count-pill">—</span>`;
   $("#feed-subtitle").textContent =
     page === "saved"
       ? "Your personal shortlist. Saved in this browser."
       : page === "closing"
         ? "Applications with a stated deadline in the next seven days."
-        : "Big ambitions start with a small discovery.";
+        : "A little discovery. A whole new direction.";
   $$(".primary-nav .nav-item").forEach((button) => {
-    const active = button.dataset.page === page;
+    const active =
+      button.dataset.page === page ||
+      (page === "discover" && button.dataset.action === "home");
     button.classList.toggle("active", active);
     if (active) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");
@@ -507,8 +573,58 @@ function navigate(page, kind = "") {
   if (page === "sources")
     loadSources().catch((error) => toast(error.message, true));
   else loadOpportunities(true);
-  window.scrollTo({ top: 0, behavior: "instant" });
+  $(".workspace-body").scrollTop = 0;
 }
+
+function openWorkspace() {
+  state.workspaceOpen = true;
+  $("#workspace").hidden = false;
+  document.body.classList.add("workspace-open");
+  $(".hero-copy").inert = true;
+  $(".hero-copy").setAttribute("aria-hidden", "true");
+}
+
+function closeWorkspace() {
+  state.workspaceOpen = false;
+  $("#workspace").hidden = true;
+  document.body.classList.remove("workspace-open");
+  $(".hero-copy").inert = false;
+  $(".hero-copy").removeAttribute("aria-hidden");
+  closeNavigation();
+}
+
+function home() {
+  state.page = "discover";
+  state.kind = "";
+  state.search = "";
+  state.region = "";
+  state.status = "active";
+  state.offset = 0;
+  closeWorkspace();
+  $$(".primary-nav .nav-item").forEach((button) => {
+    const active = button.dataset.action === "home";
+    button.classList.toggle("active", active);
+    if (active) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  });
+  window.RadwaveGlobe?.setRegion("", true);
+  loadOpportunities();
+}
+
+function selectRegion(region) {
+  if (state.page !== "discover") navigate("discover");
+  else openWorkspace();
+  state.region = region;
+  state.offset = 0;
+  loadOpportunities();
+  window.RadwaveGlobe?.setRegion(region, true);
+}
+
+window.RadwaveUI = { selectRegion };
+window.addEventListener("radwave:globe-ready", () => {
+  window.RadwaveGlobe?.setCounts(state.meta?.stats.regions || {});
+  window.RadwaveGlobe?.setRegion(state.region, false);
+});
 function clearFilters() {
   state.kind = "";
   state.search = "";
@@ -529,11 +645,16 @@ function toggleSaved(id) {
     state.saved.add(id);
   }
   try {
-    localStorage.setItem("radar-saved", JSON.stringify([...state.saved]));
+    localStorage.setItem("radwave-saved", JSON.stringify([...state.saved]));
   } catch {
     toast("Saved for this session; browser storage is unavailable.", true);
   }
   $("#saved-count").textContent = state.saved.size;
+  $("#hero-saved-count").textContent = String(state.saved.size).padStart(
+    2,
+    "0",
+  );
+  renderHorizon();
   if (state.page === "saved") loadOpportunities();
   else renderCards();
   $$(`[data-save="${CSS.escape(id)}"]`).forEach((button) => {
@@ -542,7 +663,11 @@ function toggleSaved(id) {
     button.setAttribute("aria-pressed", String(saved));
     const title =
       state.items.find((item) => item.id === id)?.title || "opportunity";
-    button.setAttribute("aria-label", `${saved ? "Unsave" : "Save"} ${title}`);
+    const isHorizon = !!button.closest("#horizon-strip");
+    button.setAttribute(
+      "aria-label",
+      `${isHorizon ? (saved ? "Remove from shortlist" : "Shortlist") : saved ? "Unsave" : "Save"} ${title}`,
+    );
     if (button.hasAttribute("data-detail-save"))
       button.innerHTML = `${icon("bookmark")} ${saved ? "Saved to shortlist" : "Save opportunity"}`;
   });
@@ -691,8 +816,7 @@ async function refresh(sourceID = "") {
 }
 
 function closeNavigation() {
-  $("#sidebar").classList.remove("nav-open");
-  $("#sidebar-backdrop").hidden = true;
+  document.body.classList.remove("header-open");
   $("#mobile-menu").setAttribute("aria-expanded", "false");
 }
 function openImport() {
@@ -715,6 +839,7 @@ document.addEventListener("click", (event) => {
   const button = event.target.closest("button,[data-close]");
   if (!button) return;
   if (button.dataset.page) navigate(button.dataset.page);
+  if (button.hasAttribute("data-region")) selectRegion(button.dataset.region);
   if (button.hasAttribute("data-kind"))
     navigate("discover", button.dataset.kind);
   if (button.hasAttribute("data-tab")) {
@@ -756,6 +881,8 @@ document.addEventListener("click", (event) => {
   if (button.dataset.action === "reload") loadOpportunities(true);
   if (button.dataset.action === "import") openImport();
   if (button.dataset.action === "source") openSource();
+  if (button.dataset.action === "home") home();
+  if (button.dataset.action === "about") showDialog("about-dialog");
   if (button.dataset.action === "share" && state.detailID) {
     const link = `${location.origin}/opportunity/${encodeURIComponent(state.detailID)}`;
     navigator.clipboard
@@ -799,11 +926,10 @@ $("#unlock-button").addEventListener("click", () => {
   showDialog("token-dialog");
 });
 $("#mobile-menu").addEventListener("click", () => {
-  const open = $("#sidebar").classList.toggle("nav-open");
-  $("#sidebar-backdrop").hidden = !open;
+  const open = document.body.classList.toggle("header-open");
   $("#mobile-menu").setAttribute("aria-expanded", String(open));
 });
-$("#sidebar-backdrop").addEventListener("click", closeNavigation);
+$("#close-workspace").addEventListener("click", closeWorkspace);
 let searchTimer;
 $("#search").addEventListener("input", (event) => {
   state.search = event.target.value;
@@ -832,7 +958,7 @@ $("#next-page").addEventListener("click", () => {
   $(`#${layout}-view`).addEventListener("click", () => {
     state.layout = layout;
     try {
-      localStorage.setItem("radar-layout", layout);
+      localStorage.setItem("radwave-layout", layout);
     } catch {
       /* Layout remains available in memory. */
     }
@@ -850,9 +976,13 @@ document.addEventListener("keydown", (event) => {
     state.page !== "sources"
   ) {
     event.preventDefault();
+    if (!state.workspaceOpen) navigate("discover");
     $("#search").focus();
   }
-  if (event.key === "Escape") closeNavigation();
+  if (event.key === "Escape") {
+    closeNavigation();
+    if (!event.target.closest("dialog") && !$("dialog[open]")) closeWorkspace();
+  }
 });
 $$("dialog").forEach((dialog) =>
   dialog.addEventListener("click", (event) => {
@@ -877,12 +1007,17 @@ $("#token-dialog").addEventListener("close", () => {
   $("#admin-token").value = "";
 });
 window.addEventListener("storage", (event) => {
-  if (event.key !== "radar-saved") return;
+  if (event.key !== "radwave-saved" && event.key !== "radar-saved") return;
   try {
     const items = JSON.parse(event.newValue || "[]");
     if (!Array.isArray(items)) return;
     state.saved = new Set(items.filter((id) => typeof id === "string"));
     $("#saved-count").textContent = state.saved.size;
+    $("#hero-saved-count").textContent = String(state.saved.size).padStart(
+      2,
+      "0",
+    );
+    renderHorizon();
     if (state.page === "saved") loadOpportunities();
     else renderCards();
   } catch {
@@ -928,7 +1063,7 @@ $("#source-form").addEventListener("submit", (event) => {
   event.preventDefault();
   requireManagement(async () => {
     const button = $("#source-submit");
-    busyButton(button, true, "Adding to radar…");
+    busyButton(button, true, "Adding to Radwave…");
     $("#source-error").hidden = true;
     try {
       const data = await api("/api/sources", {
@@ -966,7 +1101,7 @@ $("#token-form").addEventListener("submit", async (event) => {
     await api("/api/unlock", { method: "POST", authToken: token });
     state.token = token;
     try {
-      sessionStorage.setItem("radar-token", token);
+      sessionStorage.setItem("radwave-token", token);
     } catch {
       /* The token remains scoped to this page in memory. */
     }
@@ -998,7 +1133,7 @@ async function poll(force = false) {
     const signature = `${run?.id}:${run?.status}:${run?.sources_checked}:${meta.stats.total}:${meta.stats.updated_today}`;
     if (force || signature !== state.signature) {
       state.signature = signature;
-      await Promise.all([loadOpportunities(), loadSources()]);
+      await Promise.all([loadOpportunities(), loadSources(), loadHorizon()]);
     }
   } catch (error) {
     if (force) toast(error.message, true);
@@ -1011,7 +1146,7 @@ async function init() {
   $("#saved-count").textContent = state.saved.size;
   try {
     await loadMeta();
-    await Promise.all([loadOpportunities(), loadSources()]);
+    await Promise.all([loadOpportunities(), loadSources(), loadHorizon()]);
     if (state.token && state.meta.management.token_required) {
       try {
         await api("/api/unlock", { method: "POST" });

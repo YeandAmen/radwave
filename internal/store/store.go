@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/YeandAmen/opportunity-radar/internal/model"
+	"github.com/YeandAmen/radwave/internal/model"
 	_ "modernc.org/sqlite"
 )
 

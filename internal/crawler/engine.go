@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/YeandAmen/opportunity-radar/internal/ingest"
-	"github.com/YeandAmen/opportunity-radar/internal/model"
-	"github.com/YeandAmen/opportunity-radar/internal/store"
+	"github.com/YeandAmen/radwave/internal/ingest"
+	"github.com/YeandAmen/radwave/internal/model"
+	"github.com/YeandAmen/radwave/internal/store"
 )
 
 var ErrAlreadyRunning = errors.New("a source refresh is already running")

@@ -14,6 +14,7 @@
     <circle cx="12" cy="12" r=".8" fill="currentColor" />
   </symbol>
   <symbol id="compass" viewBox="0 0 24 24">
+
     <circle cx="12" cy="12" r="9" />
     <path d="m16 8-2.5 5.5L8 16l2.5-5.5L16 8Z" />
   </symbol>
@@ -180,4 +181,8 @@
   <symbol id="leaf" viewBox="0 0 24 24">
     <path d="M20 3C9 2 3 7 4 14c1 7 14 8 16-11ZM4 21l11-12" />
   </symbol>
+  <symbol id="wave" viewBox="0 0 28 28"><path d="M5 25V4h7c7 0 11 9 4 12l-4 1 10 8M5 4C-1 10 7 13 14 12M4 19c6-5 11 1 19-2"/></symbol>
+  <symbol id="minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+  <symbol id="play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7V5Z"/></symbol>
 </svg>

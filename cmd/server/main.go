@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/YeandAmen/opportunity-radar/internal/deployment"
+	"github.com/YeandAmen/radwave/internal/deployment"
 )
 
 func main() {
@@ -49,7 +49,7 @@ func serve() error {
 	}
 	result := make(chan error, 1)
 	go func() { result <- server.ListenAndServe() }()
-	slog.Info("hosted Opportunity Radar is ready", "port", port)
+	slog.Info("hosted Radwave is ready", "port", port)
 	select {
 	case <-ctx.Done():
 	case err := <-result:

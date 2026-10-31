@@ -8,9 +8,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/YeandAmen/opportunity-radar/internal/ingest"
-	"github.com/YeandAmen/opportunity-radar/internal/model"
-	"github.com/YeandAmen/opportunity-radar/internal/store"
+	"github.com/YeandAmen/radwave/internal/ingest"
+	"github.com/YeandAmen/radwave/internal/model"
+	"github.com/YeandAmen/radwave/internal/store"
 )
 
 const ExampleURL = "https://www.linkedin.com/posts/uesdnkabom_nkabomcollaborative-businessincubation-activity-7520960460347768832-FWkQ"

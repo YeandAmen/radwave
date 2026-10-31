@@ -1,4 +1,4 @@
-module github.com/YeandAmen/opportunity-radar
+module github.com/YeandAmen/radwave
 
 go 1.26.0
 

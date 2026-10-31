@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/YeandAmen/opportunity-radar/internal/bootstrap"
-	"github.com/YeandAmen/opportunity-radar/internal/crawler"
-	"github.com/YeandAmen/opportunity-radar/internal/ingest"
-	"github.com/YeandAmen/opportunity-radar/internal/store"
-	"github.com/YeandAmen/opportunity-radar/internal/web"
+	"github.com/YeandAmen/radwave/internal/bootstrap"
+	"github.com/YeandAmen/radwave/internal/crawler"
+	"github.com/YeandAmen/radwave/internal/ingest"
+	"github.com/YeandAmen/radwave/internal/store"
+	"github.com/YeandAmen/radwave/internal/web"
 )
 
 type Config struct {

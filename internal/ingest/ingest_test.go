@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/YeandAmen/opportunity-radar/internal/bootstrap"
-	"github.com/YeandAmen/opportunity-radar/internal/ingest"
-	"github.com/YeandAmen/opportunity-radar/internal/model"
+	"github.com/YeandAmen/radwave/internal/bootstrap"
+	"github.com/YeandAmen/radwave/internal/ingest"
+	"github.com/YeandAmen/radwave/internal/model"
 )
 
 func TestLinkedInReferenceExtractionAndCounterScope(t *testing.T) {
